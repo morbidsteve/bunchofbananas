@@ -356,6 +356,106 @@ export type Database = {
           notes?: string | null
         }
       }
+      user_recipes: {
+        Row: {
+          id: string
+          household_id: string
+          created_by: string
+          title: string
+          description: string | null
+          instructions: string
+          category: string | null
+          cuisine: string | null
+          prep_time_minutes: number | null
+          cook_time_minutes: number | null
+          servings: number | null
+          image_path: string | null
+          source_type: 'manual' | 'text_import' | 'ocr_import' | 'url_import'
+          source_url: string | null
+          original_text: string | null
+          is_public: boolean
+          share_token: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          created_by: string
+          title: string
+          description?: string | null
+          instructions: string
+          category?: string | null
+          cuisine?: string | null
+          prep_time_minutes?: number | null
+          cook_time_minutes?: number | null
+          servings?: number | null
+          image_path?: string | null
+          source_type?: 'manual' | 'text_import' | 'ocr_import' | 'url_import'
+          source_url?: string | null
+          original_text?: string | null
+          is_public?: boolean
+          share_token?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          created_by?: string
+          title?: string
+          description?: string | null
+          instructions?: string
+          category?: string | null
+          cuisine?: string | null
+          prep_time_minutes?: number | null
+          cook_time_minutes?: number | null
+          servings?: number | null
+          image_path?: string | null
+          source_type?: 'manual' | 'text_import' | 'ocr_import' | 'url_import'
+          source_url?: string | null
+          original_text?: string | null
+          is_public?: boolean
+          share_token?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      recipe_ingredients: {
+        Row: {
+          id: string
+          recipe_id: string
+          name: string
+          quantity: string | null
+          unit: string | null
+          notes: string | null
+          position: number
+          normalized_name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          recipe_id: string
+          name: string
+          quantity?: string | null
+          unit?: string | null
+          notes?: string | null
+          position?: number
+          normalized_name: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          recipe_id?: string
+          name?: string
+          quantity?: string | null
+          unit?: string | null
+          notes?: string | null
+          position?: number
+          normalized_name?: string
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -385,3 +485,5 @@ export type Inventory = Tables<'inventory'>
 export type Store = Tables<'stores'>
 export type PriceHistory = Tables<'price_history'>
 export type InventoryLog = Tables<'inventory_log'>
+export type UserRecipe = Tables<'user_recipes'>
+export type RecipeIngredient = Tables<'recipe_ingredients'>

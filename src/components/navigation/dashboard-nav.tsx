@@ -25,6 +25,7 @@ const navItems = [
   { href: '/dashboard/storage', label: 'Storage', icon: '🗄️' },
   { href: '/dashboard/inventory', label: 'Inventory', icon: '📦' },
   { href: '/dashboard/items', label: 'Items', icon: '📋' },
+  { href: '/dashboard/recipes', label: 'Recipes', icon: '📖' },
   { href: '/dashboard/prices', label: 'Prices', icon: '💰' },
   { href: '/dashboard/shopping', label: 'Shopping', icon: '🛒' },
 ]
