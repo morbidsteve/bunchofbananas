@@ -101,19 +101,67 @@ export default async function DashboardPage() {
     .order('priority', { ascending: false })
     .limit(10)
 
-  // Get all inventory item names for recipe suggestions
+  // Get all inventory items for recipe suggestions (with id for selection)
   const { data: allInventory } = await supabase
     .from('inventory')
     .select(`
       id,
       quantity,
       items!inner (
+        id,
         name,
         household_id
       )
     `)
     .eq('items.household_id', householdId)
     .gt('quantity', 0)
+
+  // Get depleted items (quantity = 0) for shopping list
+  const { data: depletedItems } = await supabase
+    .from('inventory')
+    .select(`
+      id,
+      quantity,
+      unit,
+      items!inner (
+        id,
+        name,
+        category,
+        household_id
+      ),
+      shelves (
+        name,
+        storage_units (
+          name
+        )
+      )
+    `)
+    .eq('items.household_id', householdId)
+    .eq('quantity', 0)
+    .limit(10)
+
+  // Get storage units with shelves for add item dialog
+  const { data: storageUnits } = await supabase
+    .from('storage_units')
+    .select(`
+      id,
+      name,
+      type,
+      shelves (
+        id,
+        name,
+        position
+      )
+    `)
+    .eq('household_id', householdId)
+    .order('name')
+
+  // Get items for the add item dropdown
+  const { data: items } = await supabase
+    .from('items')
+    .select('id, name, category, default_unit')
+    .eq('household_id', householdId)
+    .order('name')
 
   const household = membership.households as unknown as { id: string; name: string }
 
@@ -124,7 +172,16 @@ export default async function DashboardPage() {
       inventoryCount={inventoryCount || 0}
       expiringItems={(expiringItems || []) as any}
       priorityItems={(priorityItems || []) as any}
-      allInventoryItems={(allInventory || []).map(inv => (inv.items as any)?.name).filter(Boolean)}
+      allInventoryItems={(allInventory || []).map(inv => ({
+        id: inv.id,
+        itemId: (inv.items as any)?.id,
+        name: (inv.items as any)?.name
+      })).filter(i => i.name)}
+      depletedItems={(depletedItems || []) as any}
+      storageUnits={(storageUnits || []) as any}
+      items={(items || []) as any}
+      householdId={householdId}
+      userId={user.id}
     />
   )
 }

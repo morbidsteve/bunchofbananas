@@ -36,20 +36,55 @@ interface Recipe {
   matchPercentage: number
 }
 
+// Normalize ingredient name for matching (remove adjectives, quantities, etc.)
+function normalizeIngredient(name: string): string[] {
+  const lower = name.toLowerCase()
+  // Remove common adjectives and descriptors
+  const cleaned = lower
+    .replace(/\b(large|small|medium|fresh|dried|chopped|minced|diced|sliced|whole|ground|crushed|organic|raw|cooked|frozen|canned|ripe|unripe)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  // Split into individual words for partial matching
+  const words = cleaned.split(' ').filter(w => w.length > 2)
+
+  // Return both the cleaned name and individual significant words
+  return [cleaned, ...words]
+}
+
+// Check if user has an ingredient (flexible matching)
+function hasIngredient(recipeIngredient: string, userIngredients: string[]): boolean {
+  const recipeTerms = normalizeIngredient(recipeIngredient)
+
+  for (const userIng of userIngredients) {
+    const userTerms = normalizeIngredient(userIng)
+
+    // Check if any terms match
+    for (const recipeTerm of recipeTerms) {
+      for (const userTerm of userTerms) {
+        // Exact match or one contains the other
+        if (recipeTerm === userTerm ||
+            recipeTerm.includes(userTerm) ||
+            userTerm.includes(recipeTerm)) {
+          return true
+        }
+      }
+    }
+  }
+
+  return false
+}
+
 function extractIngredients(meal: MealDBMeal, userIngredients: string[]): RecipeIngredient[] {
   const ingredients: RecipeIngredient[] = []
-  const userIngredientsLower = userIngredients.map(i => i.toLowerCase())
 
   for (let i = 1; i <= 20; i++) {
     const ingredient = meal[`strIngredient${i}`]?.trim()
     const measure = meal[`strMeasure${i}`]?.trim()
 
     if (ingredient && ingredient !== '') {
-      const ingredientLower = ingredient.toLowerCase()
-      // Check if user has this ingredient (partial match)
-      const inStock = userIngredientsLower.some(
-        ui => ingredientLower.includes(ui) || ui.includes(ingredientLower)
-      )
+      // Use flexible matching
+      const inStock = hasIngredient(ingredient, userIngredients)
       ingredients.push({
         name: ingredient,
         measure: measure || '',
@@ -59,6 +94,16 @@ function extractIngredients(meal: MealDBMeal, userIngredients: string[]): Recipe
   }
 
   return ingredients
+}
+
+// Shuffle array using Fisher-Yates algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
 }
 
 export async function POST(request: NextRequest) {
@@ -72,8 +117,9 @@ export async function POST(request: NextRequest) {
     const recipes: Recipe[] = []
     const seenMealIds = new Set<string>()
 
-    // Search for recipes using multiple ingredients to get variety
-    const searchIngredients = ingredients.slice(0, 5)
+    // Shuffle ingredients to get different results each time
+    const shuffledIngredients = shuffleArray(ingredients)
+    const searchIngredients = shuffledIngredients.slice(0, 6)
 
     for (const ingredient of searchIngredients) {
       try {
