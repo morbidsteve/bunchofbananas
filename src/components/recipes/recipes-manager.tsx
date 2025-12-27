@@ -807,12 +807,12 @@ Instructions:
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-md"
         />
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        <Select value={categoryFilter || "all"} onValueChange={(v) => setCategoryFilter(v === "all" ? "" : v)}>
           <SelectTrigger className="w-48">
             <SelectValue placeholder="All categories" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All categories</SelectItem>
+            <SelectItem value="all">All categories</SelectItem>
             {RECIPE_CATEGORIES.map((cat) => (
               <SelectItem key={cat} value={cat}>
                 {cat}
