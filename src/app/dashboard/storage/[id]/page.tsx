@@ -50,6 +50,13 @@ export default async function StorageDetailPage({ params }: PageProps) {
 
   if (!storageUnit) notFound()
 
+  // Get all items for the household (for add item dropdown)
+  const { data: items } = await supabase
+    .from('items')
+    .select('id, name, category, default_unit')
+    .eq('household_id', membership.household_id)
+    .order('name')
+
   // Sort shelves by position
   const shelves = (storageUnit.shelves || []) as any[]
   const sortedShelves = shelves.sort((a: any, b: any) => a.position - b.position)
@@ -58,6 +65,8 @@ export default async function StorageDetailPage({ params }: PageProps) {
     <StorageDetail
       storageUnit={{ ...storageUnit, shelves: sortedShelves } as any}
       householdId={membership.household_id}
+      userId={user.id}
+      items={(items || []) as any}
     />
   )
 }

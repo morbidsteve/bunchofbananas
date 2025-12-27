@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,11 +23,37 @@ interface ExpiringItem {
   } | null
 }
 
+interface PriorityItem {
+  id: string
+  quantity: number
+  unit: string
+  priority: 'use_soon' | 'urgent'
+  condition_notes: string | null
+  items: {
+    name: string
+    category: string | null
+  } | null
+  shelves: {
+    name: string
+    storage_units: {
+      name: string
+    } | null
+  } | null
+}
+
+interface RecipeSuggestion {
+  title: string
+  url: string
+  description: string
+}
+
 interface DashboardOverviewProps {
   householdName: string
   storageCount: number
   inventoryCount: number
   expiringItems: ExpiringItem[]
+  priorityItems?: PriorityItem[]
+  allInventoryItems?: string[]
 }
 
 export function DashboardOverview({
@@ -34,8 +61,45 @@ export function DashboardOverview({
   storageCount,
   inventoryCount,
   expiringItems,
+  priorityItems = [],
+  allInventoryItems = [],
 }: DashboardOverviewProps) {
   const today = new Date()
+  const [recipes, setRecipes] = useState<RecipeSuggestion[]>([])
+  const [loadingRecipes, setLoadingRecipes] = useState(false)
+  const [recipeError, setRecipeError] = useState('')
+
+  async function searchRecipes() {
+    // Combine priority items with some regular items for recipe search
+    const priorityIngredients = priorityItems.map(p => p.items?.name).filter(Boolean)
+    const otherIngredients = allInventoryItems.filter(item => !priorityIngredients.includes(item)).slice(0, 5)
+    const ingredients = [...priorityIngredients, ...otherIngredients].slice(0, 8)
+
+    if (ingredients.length === 0) {
+      setRecipeError('No items in inventory to search recipes for')
+      return
+    }
+
+    setLoadingRecipes(true)
+    setRecipeError('')
+
+    try {
+      const response = await fetch('/api/recipes/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredients }),
+      })
+
+      if (!response.ok) throw new Error('Failed to fetch recipes')
+
+      const data = await response.json()
+      setRecipes(data.recipes || [])
+    } catch {
+      setRecipeError('Could not load recipe suggestions')
+    } finally {
+      setLoadingRecipes(false)
+    }
+  }
 
   function getDaysUntilExpiration(dateStr: string) {
     const expDate = new Date(dateStr)
@@ -168,6 +232,130 @@ export function DashboardOverview({
               ))}
             </div>
           </CardContent>
+        </Card>
+      )}
+
+      {/* Use These Soon - Priority Items */}
+      {priorityItems.length > 0 && (
+        <Card className="border-orange-200">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-orange-600">
+                  <span>⚡</span> Use These Soon
+                </CardTitle>
+                <CardDescription>
+                  Items marked for priority use - perfect for recipe planning
+                </CardDescription>
+              </div>
+              <Button
+                onClick={searchRecipes}
+                disabled={loadingRecipes}
+                className="bg-orange-500 hover:bg-orange-600"
+              >
+                {loadingRecipes ? 'Finding...' : '🍳 Find Recipes'}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {priorityItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`flex items-center justify-between p-3 rounded-lg ${
+                    item.priority === 'urgent' ? 'bg-red-50' : 'bg-orange-50'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{item.items?.name}</p>
+                      <Badge className={item.priority === 'urgent' ? 'bg-red-500' : 'bg-orange-500'}>
+                        {item.priority === 'urgent' ? 'Urgent' : 'Use Soon'}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      {item.quantity} {item.unit} in {item.shelves?.storage_units?.name} - {item.shelves?.name}
+                    </p>
+                    {item.condition_notes && (
+                      <p className="text-sm text-orange-700 italic mt-1">{item.condition_notes}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Recipe Suggestions */}
+            {recipeError && (
+              <p className="text-red-500 text-sm mt-4">{recipeError}</p>
+            )}
+            {recipes.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-orange-200">
+                <h4 className="font-semibold text-gray-700 mb-3">🍽️ Recipe Ideas</h4>
+                <div className="space-y-2">
+                  {recipes.map((recipe, idx) => (
+                    <a
+                      key={idx}
+                      href={recipe.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block p-3 bg-white border border-orange-100 rounded-lg hover:border-orange-300 transition-colors"
+                    >
+                      <p className="font-medium text-orange-700">{recipe.title}</p>
+                      <p className="text-sm text-gray-600">{recipe.description}</p>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recipe Finder for all inventory */}
+      {priorityItems.length === 0 && allInventoryItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <span>🍳</span> What Can I Make?
+                </CardTitle>
+                <CardDescription>
+                  Get recipe ideas based on what you have in stock
+                </CardDescription>
+              </div>
+              <Button
+                onClick={searchRecipes}
+                disabled={loadingRecipes}
+                variant="outline"
+              >
+                {loadingRecipes ? 'Finding...' : 'Find Recipes'}
+              </Button>
+            </div>
+          </CardHeader>
+          {(recipes.length > 0 || recipeError) && (
+            <CardContent>
+              {recipeError && (
+                <p className="text-red-500 text-sm">{recipeError}</p>
+              )}
+              {recipes.length > 0 && (
+                <div className="space-y-2">
+                  {recipes.map((recipe, idx) => (
+                    <a
+                      key={idx}
+                      href={recipe.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <p className="font-medium">{recipe.title}</p>
+                      <p className="text-sm text-gray-600">{recipe.description}</p>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          )}
         </Card>
       )}
 

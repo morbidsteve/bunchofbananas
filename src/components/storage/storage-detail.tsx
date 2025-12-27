@@ -23,6 +23,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from 'sonner'
+
+interface Item {
+  id: string
+  name: string
+  category: string | null
+  default_unit: string | null
+}
 
 interface InventoryItem {
   id: string
@@ -54,6 +63,8 @@ interface StorageUnit {
 interface StorageDetailProps {
   storageUnit: StorageUnit
   householdId: string
+  userId: string
+  items: Item[]
 }
 
 const typeIcons: Record<string, string> = {
@@ -64,12 +75,24 @@ const typeIcons: Record<string, string> = {
   other: '📦',
 }
 
-export function StorageDetail({ storageUnit, householdId }: StorageDetailProps) {
+export function StorageDetail({ storageUnit, householdId, userId, items }: StorageDetailProps) {
   const router = useRouter()
   const [shelfDialogOpen, setShelfDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [addItemDialogOpen, setAddItemDialogOpen] = useState(false)
+  const [selectedShelfId, setSelectedShelfId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [shelfName, setShelfName] = useState('')
+  const [addItemForm, setAddItemForm] = useState({
+    itemId: '',
+    newItemName: '',
+    newItemCategory: '',
+    quantity: '1',
+    unit: 'count',
+    expirationDate: '',
+  })
+  const [isNewItem, setIsNewItem] = useState(false)
 
   async function handleAddShelf(e: React.FormEvent) {
     e.preventDefault()
@@ -121,6 +144,110 @@ export function StorageDetail({ storageUnit, householdId }: StorageDetailProps) 
     if (!error) {
       router.refresh()
     }
+  }
+
+  async function handleQuantityChange(inv: InventoryItem, delta: number) {
+    if (!inv.items) return
+
+    setUpdatingId(inv.id)
+    const supabase = createClient()
+    const newQuantity = Math.max(0, inv.quantity + delta)
+
+    const { error } = await supabase
+      .from('inventory')
+      .update({ quantity: newQuantity })
+      .eq('id', inv.id)
+
+    if (error) {
+      toast.error('Failed to update quantity')
+    } else {
+      // Log the change
+      const action = delta > 0 ? 'added' : 'used'
+      await supabase.from('inventory_log').insert({
+        inventory_id: inv.id,
+        item_id: inv.items.id,
+        action,
+        quantity_change: delta,
+        performed_by: userId,
+        notes: delta > 0 ? 'Added via storage view' : 'Used via storage view',
+      })
+
+      if (newQuantity === 0) {
+        toast.success(`${inv.items.name} is now depleted`)
+      } else {
+        toast.success(`${inv.items.name}: ${inv.quantity} → ${newQuantity} ${inv.unit}`)
+      }
+      router.refresh()
+    }
+
+    setUpdatingId(null)
+  }
+
+  function openAddItemDialog(shelfId: string) {
+    setSelectedShelfId(shelfId)
+    setAddItemForm({
+      itemId: '',
+      newItemName: '',
+      newItemCategory: '',
+      quantity: '1',
+      unit: 'count',
+      expirationDate: '',
+    })
+    setIsNewItem(false)
+    setAddItemDialogOpen(true)
+  }
+
+  async function handleAddItem(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedShelfId) return
+    setLoading(true)
+
+    const supabase = createClient()
+    let itemId = addItemForm.itemId
+
+    // Create new item if needed
+    if (isNewItem && addItemForm.newItemName) {
+      const { data: newItem, error: itemError } = await supabase
+        .from('items')
+        .insert({
+          household_id: householdId,
+          name: addItemForm.newItemName,
+          category: addItemForm.newItemCategory || null,
+          default_unit: addItemForm.unit,
+        })
+        .select()
+        .single()
+
+      if (itemError) {
+        toast.error('Failed to create item')
+        setLoading(false)
+        return
+      }
+      itemId = newItem.id
+    }
+
+    // Add to inventory
+    const { error } = await supabase
+      .from('inventory')
+      .insert({
+        item_id: itemId,
+        shelf_id: selectedShelfId,
+        quantity: parseFloat(addItemForm.quantity),
+        unit: addItemForm.unit,
+        expiration_date: addItemForm.expirationDate || null,
+        added_by: userId,
+      })
+
+    if (error) {
+      toast.error('Failed to add item')
+    } else {
+      const itemName = isNewItem ? addItemForm.newItemName : items.find(i => i.id === itemId)?.name
+      toast.success(`Added ${itemName}`)
+      setAddItemDialogOpen(false)
+      router.refresh()
+    }
+
+    setLoading(false)
   }
 
   const totalItems = storageUnit.shelves.reduce(
@@ -284,33 +411,82 @@ export function StorageDetail({ storageUnit, householdId }: StorageDetailProps) 
               </CardHeader>
               <CardContent>
                 {shelf.inventory.length === 0 ? (
-                  <p className="text-sm text-gray-500 italic">No items on this shelf</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-500 italic">No items on this shelf</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openAddItemDialog(shelf.id)}
+                    >
+                      + Add Item
+                    </Button>
+                  </div>
                 ) : (
                   <div className="space-y-2">
-                    {shelf.inventory.map((inv) => (
-                      <div
-                        key={inv.id}
-                        className="flex items-center justify-between p-2 bg-gray-50 rounded"
-                      >
-                        <div>
-                          <span className="font-medium">{inv.items?.name}</span>
-                          <span className="text-gray-500 ml-2">
-                            {inv.quantity} {inv.unit}
-                          </span>
+                    {shelf.inventory.map((inv) => {
+                      const isDepleted = inv.quantity === 0
+                      const isUpdating = updatingId === inv.id
+
+                      return (
+                        <div
+                          key={inv.id}
+                          className={`flex items-center justify-between p-2 rounded ${isDepleted ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium">{inv.items?.name}</span>
+                            {inv.items?.category && (
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                {inv.items.category}
+                              </Badge>
+                            )}
+                            {inv.expiration_date && (
+                              <Badge
+                                variant={
+                                  new Date(inv.expiration_date) <= new Date()
+                                    ? 'destructive'
+                                    : 'secondary'
+                                }
+                                className="ml-2"
+                              >
+                                Exp: {new Date(inv.expiration_date).toLocaleDateString()}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleQuantityChange(inv, -1)}
+                              disabled={isUpdating || isDepleted}
+                            >
+                              -
+                            </Button>
+                            <div className="w-14 text-center">
+                              <div className="font-semibold">{inv.quantity}</div>
+                              <div className="text-xs text-gray-500">{inv.unit}</div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleQuantityChange(inv, 1)}
+                              disabled={isUpdating}
+                            >
+                              +
+                            </Button>
+                          </div>
                         </div>
-                        {inv.expiration_date && (
-                          <Badge
-                            variant={
-                              new Date(inv.expiration_date) <= new Date()
-                                ? 'destructive'
-                                : 'secondary'
-                            }
-                          >
-                            Exp: {new Date(inv.expiration_date).toLocaleDateString()}
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
+                      )
+                    })}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full mt-2 text-amber-600 hover:bg-amber-50"
+                      onClick={() => openAddItemDialog(shelf.id)}
+                    >
+                      + Add Item to {shelf.name}
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -318,6 +494,149 @@ export function StorageDetail({ storageUnit, householdId }: StorageDetailProps) 
           ))}
         </div>
       )}
+
+      {/* Add Item Dialog */}
+      <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Item to Shelf</DialogTitle>
+            <DialogDescription>
+              Add an existing item or create a new one
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddItem} className="space-y-4">
+            {/* Item Selection */}
+            <div className="space-y-2">
+              <Label>Item</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={!isNewItem ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => setIsNewItem(false)}
+                >
+                  Existing
+                </Button>
+                <Button
+                  type="button"
+                  variant={isNewItem ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => setIsNewItem(true)}
+                >
+                  New Item
+                </Button>
+              </div>
+            </div>
+
+            {isNewItem ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="newItemName">Item Name</Label>
+                  <Input
+                    id="newItemName"
+                    value={addItemForm.newItemName}
+                    onChange={(e) => setAddItemForm({ ...addItemForm, newItemName: e.target.value })}
+                    placeholder="Organic Milk"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category (optional)</Label>
+                  <Input
+                    id="category"
+                    value={addItemForm.newItemCategory}
+                    onChange={(e) => setAddItemForm({ ...addItemForm, newItemCategory: e.target.value })}
+                    placeholder="Dairy, Produce, etc."
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label>Select Item</Label>
+                <Select
+                  value={addItemForm.itemId}
+                  onValueChange={(value) => setAddItemForm({ ...addItemForm, itemId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose an item" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {items.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} {item.category && `(${item.category})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {items.length === 0 && (
+                  <p className="text-sm text-gray-500">No items yet. Create a new one!</p>
+                )}
+              </div>
+            )}
+
+            {/* Quantity */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={addItemForm.quantity}
+                  onChange={(e) => setAddItemForm({ ...addItemForm, quantity: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Unit</Label>
+                <Select
+                  value={addItemForm.unit}
+                  onValueChange={(value) => setAddItemForm({ ...addItemForm, unit: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="count">count</SelectItem>
+                    <SelectItem value="lb">lb</SelectItem>
+                    <SelectItem value="oz">oz</SelectItem>
+                    <SelectItem value="gallon">gallon</SelectItem>
+                    <SelectItem value="liter">liter</SelectItem>
+                    <SelectItem value="pack">pack</SelectItem>
+                    <SelectItem value="bag">bag</SelectItem>
+                    <SelectItem value="box">box</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Expiration */}
+            <div className="space-y-2">
+              <Label htmlFor="expiration">Expiration Date (optional)</Label>
+              <Input
+                id="expiration"
+                type="date"
+                value={addItemForm.expirationDate}
+                onChange={(e) => setAddItemForm({ ...addItemForm, expirationDate: e.target.value })}
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setAddItemDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-amber-500 hover:bg-amber-600"
+                disabled={loading || (!isNewItem && !addItemForm.itemId)}
+              >
+                {loading ? 'Adding...' : 'Add to Shelf'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

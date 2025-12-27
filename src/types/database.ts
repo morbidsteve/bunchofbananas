@@ -169,6 +169,14 @@ export type Database = {
           default_unit: string | null
           barcode: string | null
           image_url: string | null
+          calories: number | null
+          protein_g: number | null
+          carbs_g: number | null
+          fat_g: number | null
+          fiber_g: number | null
+          sugar_g: number | null
+          sodium_mg: number | null
+          nutriscore: string | null
           created_at: string
           updated_at: string
         }
@@ -180,6 +188,14 @@ export type Database = {
           default_unit?: string | null
           barcode?: string | null
           image_url?: string | null
+          calories?: number | null
+          protein_g?: number | null
+          carbs_g?: number | null
+          fat_g?: number | null
+          fiber_g?: number | null
+          sugar_g?: number | null
+          sodium_mg?: number | null
+          nutriscore?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -191,6 +207,14 @@ export type Database = {
           default_unit?: string | null
           barcode?: string | null
           image_url?: string | null
+          calories?: number | null
+          protein_g?: number | null
+          carbs_g?: number | null
+          fat_g?: number | null
+          fiber_g?: number | null
+          sugar_g?: number | null
+          sodium_mg?: number | null
+          nutriscore?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -206,6 +230,8 @@ export type Database = {
           added_at: string
           added_by: string
           notes: string | null
+          priority: 'normal' | 'use_soon' | 'urgent'
+          condition_notes: string | null
           updated_at: string
         }
         Insert: {
@@ -218,6 +244,8 @@ export type Database = {
           added_at?: string
           added_by: string
           notes?: string | null
+          priority?: 'normal' | 'use_soon' | 'urgent'
+          condition_notes?: string | null
           updated_at?: string
         }
         Update: {
@@ -230,6 +258,8 @@ export type Database = {
           added_at?: string
           added_by?: string
           notes?: string | null
+          priority?: 'normal' | 'use_soon' | 'urgent'
+          condition_notes?: string | null
           updated_at?: string
         }
       }

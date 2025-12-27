@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -19,12 +19,19 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 
+// Lazy load the barcode scanner to avoid SSR issues
+const BarcodeScanner = lazy(() =>
+  import('@/components/scanner/barcode-scanner').then(mod => ({ default: mod.BarcodeScanner }))
+)
+
 interface InventoryItem {
   id: string
   quantity: number
   unit: string
   expiration_date: string | null
   notes: string | null
+  priority: 'normal' | 'use_soon' | 'urgent'
+  condition_notes: string | null
   added_at: string
   items: {
     id: string
@@ -62,10 +69,17 @@ interface StorageUnit {
   shelves: Shelf[]
 }
 
+interface Store {
+  id: string
+  name: string
+  location: string | null
+}
+
 interface InventoryListProps {
   inventory: InventoryItem[]
   items: Item[]
   storageUnits: StorageUnit[]
+  stores: Store[]
   householdId: string
   userId: string
 }
@@ -82,15 +96,27 @@ export function InventoryList({
   inventory,
   items,
   storageUnits,
+  stores,
   householdId,
   userId,
 }: InventoryListProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [priorityDialogOpen, setPriorityDialogOpen] = useState(false)
+  const [selectedInventory, setSelectedInventory] = useState<InventoryItem | null>(null)
   const [loading, setLoading] = useState(false)
   const [showDepleted, setShowDepleted] = useState(false)
+  const [showPriorityOnly, setShowPriorityOnly] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [addAnother, setAddAnother] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
+  const [lookingUpBarcode, setLookingUpBarcode] = useState(false)
+  const [scannedBarcode, setScannedBarcode] = useState('')
+  const [priorityForm, setPriorityForm] = useState({
+    priority: 'normal' as 'normal' | 'use_soon' | 'urgent',
+    conditionNotes: '',
+  })
 
   const [formData, setFormData] = useState({
     itemId: '',
@@ -100,6 +126,9 @@ export function InventoryList({
     quantity: '1',
     unit: 'count',
     expirationDate: '',
+    storeId: '',
+    newStoreName: '',
+    price: '',
   })
 
   const [isNewItem, setIsNewItem] = useState(false)
@@ -113,11 +142,17 @@ export function InventoryList({
     // Filter by quantity (show depleted or not)
     const matchesQuantityFilter = showDepleted ? true : inv.quantity > 0
 
-    return matchesSearch && matchesQuantityFilter
+    // Filter by priority
+    const matchesPriorityFilter = showPriorityOnly ? inv.priority !== 'normal' : true
+
+    return matchesSearch && matchesQuantityFilter && matchesPriorityFilter
   })
 
   // Count of depleted items
   const depletedCount = inventory.filter((inv) => inv.quantity === 0).length
+
+  // Count of priority items
+  const priorityCount = inventory.filter((inv) => inv.priority !== 'normal' && inv.quantity > 0).length
 
   async function handleAddInventory(e: React.FormEvent) {
     e.preventDefault()
@@ -125,6 +160,7 @@ export function InventoryList({
 
     const supabase = createClient()
     let itemId = formData.itemId
+    let storeId = formData.storeId
 
     // Create new item if needed
     if (isNewItem && formData.newItemName) {
@@ -135,15 +171,33 @@ export function InventoryList({
           name: formData.newItemName,
           category: formData.newItemCategory || null,
           default_unit: formData.unit,
+          barcode: scannedBarcode || null,
         })
         .select()
         .single()
 
       if (itemError) {
+        toast.error('Failed to create item')
         setLoading(false)
         return
       }
       itemId = newItem.id
+    }
+
+    // Create new store if needed
+    if (formData.newStoreName && !formData.storeId) {
+      const { data: newStore, error: storeError } = await supabase
+        .from('stores')
+        .insert({
+          household_id: householdId,
+          name: formData.newStoreName,
+        })
+        .select()
+        .single()
+
+      if (!storeError && newStore) {
+        storeId = newStore.id
+      }
     }
 
     // Add to inventory
@@ -159,18 +213,57 @@ export function InventoryList({
       })
 
     if (!error) {
-      setDialogOpen(false)
-      setFormData({
-        itemId: '',
-        newItemName: '',
-        newItemCategory: '',
-        shelfId: '',
-        quantity: '1',
-        unit: 'count',
-        expirationDate: '',
-      })
-      setIsNewItem(false)
+      // Record price history if price was provided
+      if (formData.price && storeId) {
+        await supabase.from('price_history').insert({
+          item_id: itemId,
+          store_id: storeId,
+          price: parseFloat(formData.price),
+          quantity: parseFloat(formData.quantity),
+          unit: formData.unit,
+          recorded_by: userId,
+        })
+      }
+
+      const itemName = isNewItem ? formData.newItemName : items.find(i => i.id === itemId)?.name
+      toast.success(`Added ${itemName} to inventory`)
+
+      if (addAnother) {
+        // Reset only item-specific fields, keep shelf and store for convenience
+        setFormData({
+          itemId: '',
+          newItemName: '',
+          newItemCategory: '',
+          shelfId: formData.shelfId, // Keep the shelf selection
+          quantity: '1',
+          unit: 'count',
+          expirationDate: '',
+          storeId: formData.storeId, // Keep store selection
+          newStoreName: '',
+          price: '',
+        })
+        setIsNewItem(false)
+        setScannedBarcode('')
+      } else {
+        setDialogOpen(false)
+        setFormData({
+          itemId: '',
+          newItemName: '',
+          newItemCategory: '',
+          shelfId: '',
+          quantity: '1',
+          unit: 'count',
+          expirationDate: '',
+          storeId: '',
+          newStoreName: '',
+          price: '',
+        })
+        setIsNewItem(false)
+        setScannedBarcode('')
+      }
       router.refresh()
+    } else {
+      toast.error('Failed to add item')
     }
 
     setLoading(false)
@@ -220,6 +313,79 @@ export function InventoryList({
 
     setUpdatingId(null)
     router.refresh()
+  }
+
+  function openPriorityDialog(inv: InventoryItem) {
+    setSelectedInventory(inv)
+    setPriorityForm({
+      priority: inv.priority || 'normal',
+      conditionNotes: inv.condition_notes || '',
+    })
+    setPriorityDialogOpen(true)
+  }
+
+  async function handleSetPriority(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedInventory) return
+
+    setLoading(true)
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('inventory')
+      .update({
+        priority: priorityForm.priority,
+        condition_notes: priorityForm.conditionNotes || null,
+      })
+      .eq('id', selectedInventory.id)
+
+    if (error) {
+      toast.error('Failed to update priority')
+    } else {
+      const priorityLabels = { normal: 'Normal', use_soon: 'Use Soon', urgent: 'Urgent' }
+      toast.success(`${selectedInventory.items?.name} marked as ${priorityLabels[priorityForm.priority]}`)
+      setPriorityDialogOpen(false)
+      router.refresh()
+    }
+
+    setLoading(false)
+  }
+
+  async function handleBarcodeScan(barcode: string) {
+    setShowScanner(false)
+    setLookingUpBarcode(true)
+    setScannedBarcode(barcode)
+
+    try {
+      const response = await fetch(`/api/lookup/barcode?barcode=${encodeURIComponent(barcode)}`)
+      const data = await response.json()
+
+      if (data.found && data.product) {
+        const product = data.product
+        // Set form to new item mode and populate with scanned data
+        setIsNewItem(true)
+        setFormData({
+          ...formData,
+          newItemName: product.brand ? `${product.brand} ${product.name}` : product.name,
+          newItemCategory: product.category || '',
+          quantity: '1',
+          unit: 'count',
+        })
+        setDialogOpen(true)
+        toast.success(`Found: ${product.name}`)
+      } else {
+        // Product not found, open dialog with just the barcode
+        setIsNewItem(true)
+        setDialogOpen(true)
+        toast.info('Product not in database. Please enter details manually.')
+      }
+    } catch {
+      toast.error('Failed to lookup barcode')
+      setIsNewItem(true)
+      setDialogOpen(true)
+    } finally {
+      setLookingUpBarcode(false)
+    }
   }
 
   async function handleRestockItem(inv: InventoryItem) {
@@ -281,15 +447,23 @@ export function InventoryList({
           <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
           <p className="text-gray-600 mt-1">All items across your storage</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              className="bg-amber-500 hover:bg-amber-600"
-              disabled={!hasShelves}
-            >
-              + Add Item
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowScanner(true)}
+            disabled={!hasShelves || lookingUpBarcode}
+          >
+            {lookingUpBarcode ? 'Looking up...' : '📷 Scan'}
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                className="bg-amber-500 hover:bg-amber-600"
+                disabled={!hasShelves}
+              >
+                + Add Item
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Add Item to Inventory</DialogTitle>
@@ -444,6 +618,74 @@ export function InventoryList({
                 />
               </div>
 
+              {/* Purchase Location and Price (optional) */}
+              <div className="border-t pt-4 mt-2">
+                <p className="text-sm text-gray-500 mb-3">Purchase Info (optional)</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Store</Label>
+                    {stores.length > 0 ? (
+                      <Select
+                        value={formData.storeId}
+                        onValueChange={(value) => setFormData({ ...formData, storeId: value, newStoreName: '' })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select store" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {stores.map((store) => (
+                            <SelectItem key={store.id} value={store.id}>
+                              {store.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        placeholder="Store name"
+                        value={formData.newStoreName}
+                        onChange={(e) => setFormData({ ...formData, newStoreName: e.target.value })}
+                      />
+                    )}
+                    {stores.length > 0 && !formData.storeId && (
+                      <Input
+                        placeholder="Or enter new store"
+                        value={formData.newStoreName}
+                        onChange={(e) => setFormData({ ...formData, newStoreName: e.target.value, storeId: '' })}
+                        className="mt-2"
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="price">Price ($)</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.price}
+                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Add Another Checkbox */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="addAnother"
+                  checked={addAnother}
+                  onChange={(e) => setAddAnother(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                />
+                <Label htmlFor="addAnother" className="text-sm font-normal cursor-pointer">
+                  Add another item after saving
+                </Label>
+              </div>
+
               <div className="flex gap-2 justify-end">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
@@ -458,27 +700,54 @@ export function InventoryList({
               </div>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
+      {/* Barcode Scanner Modal */}
+      {showScanner && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+            <div className="text-white">Loading scanner...</div>
+          </div>
+        }>
+          <BarcodeScanner
+            onScan={handleBarcodeScan}
+            onClose={() => setShowScanner(false)}
+          />
+        </Suspense>
+      )}
+
       {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
         <Input
           placeholder="Search items, categories, or storage..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-md"
         />
-        {depletedCount > 0 && (
-          <Button
-            variant={showDepleted ? 'secondary' : 'outline'}
-            size="sm"
-            onClick={() => setShowDepleted(!showDepleted)}
-            className="w-fit"
-          >
-            {showDepleted ? 'Hide' : 'Show'} depleted ({depletedCount})
-          </Button>
-        )}
+        <div className="flex gap-2 flex-wrap">
+          {priorityCount > 0 && (
+            <Button
+              variant={showPriorityOnly ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowPriorityOnly(!showPriorityOnly)}
+              className={showPriorityOnly ? 'bg-orange-500 hover:bg-orange-600' : 'border-orange-300 text-orange-600'}
+            >
+              Use Soon ({priorityCount})
+            </Button>
+          )}
+          {depletedCount > 0 && (
+            <Button
+              variant={showDepleted ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setShowDepleted(!showDepleted)}
+              className="w-fit"
+            >
+              {showDepleted ? 'Hide' : 'Show'} depleted ({depletedCount})
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* No storage warning */}
@@ -515,9 +784,16 @@ export function InventoryList({
           {filteredInventory.map((inv) => {
             const isDepleted = inv.quantity === 0
             const isUpdating = updatingId === inv.id
+            const hasPriority = inv.priority && inv.priority !== 'normal'
 
             return (
-              <Card key={inv.id} className={isDepleted ? 'opacity-60 bg-gray-50' : ''}>
+              <Card
+                key={inv.id}
+                className={`${isDepleted ? 'opacity-60 bg-gray-50' : ''} ${
+                  inv.priority === 'urgent' ? 'border-red-300 bg-red-50' :
+                  inv.priority === 'use_soon' ? 'border-orange-300 bg-orange-50' : ''
+                }`}
+              >
                 <CardContent className="py-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -535,16 +811,38 @@ export function InventoryList({
                               {inv.items.category}
                             </Badge>
                           )}
+                          {inv.priority === 'urgent' && (
+                            <Badge className="bg-red-500">Urgent</Badge>
+                          )}
+                          {inv.priority === 'use_soon' && (
+                            <Badge className="bg-orange-500">Use Soon</Badge>
+                          )}
                           {getExpirationBadge(inv.expiration_date)}
                           {isDepleted && (
                             <Badge variant="secondary">Depleted</Badge>
                           )}
                         </div>
+                        {inv.condition_notes && (
+                          <p className="text-sm text-orange-700 mt-1 italic">
+                            {inv.condition_notes}
+                          </p>
+                        )}
                       </div>
                     </div>
 
                     {/* Quantity Controls */}
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {!isDepleted && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openPriorityDialog(inv)}
+                          className={hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-500'}
+                          title="Set priority"
+                        >
+                          ⚡
+                        </Button>
+                      )}
                       {isDepleted ? (
                         <Button
                           variant="outline"
@@ -597,6 +895,59 @@ export function InventoryList({
           })}
         </div>
       )}
+
+      {/* Priority Dialog */}
+      <Dialog open={priorityDialogOpen} onOpenChange={setPriorityDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Set Priority</DialogTitle>
+            <DialogDescription>
+              Mark "{selectedInventory?.items?.name}" for attention
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSetPriority} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Priority Level</Label>
+              <Select
+                value={priorityForm.priority}
+                onValueChange={(value: 'normal' | 'use_soon' | 'urgent') =>
+                  setPriorityForm({ ...priorityForm, priority: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="use_soon">Use Soon - needs to be used</SelectItem>
+                  <SelectItem value="urgent">Urgent - use immediately</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="conditionNotes">Condition Notes (optional)</Label>
+              <Input
+                id="conditionNotes"
+                value={priorityForm.conditionNotes}
+                onChange={(e) => setPriorityForm({ ...priorityForm, conditionNotes: e.target.value })}
+                placeholder="e.g., getting mushy, almost expired"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setPriorityDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-amber-500 hover:bg-amber-600"
+                disabled={loading}
+              >
+                {loading ? 'Saving...' : 'Save Priority'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

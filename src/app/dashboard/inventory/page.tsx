@@ -30,6 +30,8 @@ export default async function InventoryPage() {
       unit,
       expiration_date,
       notes,
+      priority,
+      condition_notes,
       added_at,
       items!inner (
         id,
@@ -73,11 +75,19 @@ export default async function InventoryPage() {
     .eq('household_id', householdId)
     .order('name')
 
+  // Get all stores for purchase location dropdown
+  const { data: stores } = await supabase
+    .from('stores')
+    .select('id, name, location')
+    .eq('household_id', householdId)
+    .order('name')
+
   return (
     <InventoryList
       inventory={(inventory || []) as any}
       items={(items || []) as any}
       storageUnits={(storageUnits || []) as any}
+      stores={(stores || []) as any}
       householdId={householdId}
       userId={user.id}
     />

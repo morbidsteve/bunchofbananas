@@ -74,6 +74,47 @@ export default async function DashboardPage() {
     .order('expiration_date', { ascending: true })
     .limit(5)
 
+  // Get priority items (use_soon or urgent)
+  const { data: priorityItems } = await supabase
+    .from('inventory')
+    .select(`
+      id,
+      quantity,
+      unit,
+      priority,
+      condition_notes,
+      items!inner (
+        name,
+        category,
+        household_id
+      ),
+      shelves (
+        name,
+        storage_units (
+          name
+        )
+      )
+    `)
+    .eq('items.household_id', householdId)
+    .neq('priority', 'normal')
+    .gt('quantity', 0)
+    .order('priority', { ascending: false })
+    .limit(10)
+
+  // Get all inventory item names for recipe suggestions
+  const { data: allInventory } = await supabase
+    .from('inventory')
+    .select(`
+      id,
+      quantity,
+      items!inner (
+        name,
+        household_id
+      )
+    `)
+    .eq('items.household_id', householdId)
+    .gt('quantity', 0)
+
   const household = membership.households as unknown as { id: string; name: string }
 
   return (
@@ -82,6 +123,8 @@ export default async function DashboardPage() {
       storageCount={storageCount || 0}
       inventoryCount={inventoryCount || 0}
       expiringItems={(expiringItems || []) as any}
+      priorityItems={(priorityItems || []) as any}
+      allInventoryItems={(allInventory || []).map(inv => (inv.items as any)?.name).filter(Boolean)}
     />
   )
 }
