@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from 'sonner'
 
 interface InventoryItem {
   id: string
@@ -88,6 +89,8 @@ export function InventoryList({
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [showDepleted, setShowDepleted] = useState(false)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     itemId: '',
@@ -101,11 +104,20 @@ export function InventoryList({
 
   const [isNewItem, setIsNewItem] = useState(false)
 
-  const filteredInventory = inventory.filter((inv) =>
-    inv.items?.name.toLowerCase().includes(search.toLowerCase()) ||
-    inv.items?.category?.toLowerCase().includes(search.toLowerCase()) ||
-    inv.shelves?.storage_units?.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredInventory = inventory.filter((inv) => {
+    // Filter by search
+    const matchesSearch = inv.items?.name.toLowerCase().includes(search.toLowerCase()) ||
+      inv.items?.category?.toLowerCase().includes(search.toLowerCase()) ||
+      inv.shelves?.storage_units?.name.toLowerCase().includes(search.toLowerCase())
+
+    // Filter by quantity (show depleted or not)
+    const matchesQuantityFilter = showDepleted ? true : inv.quantity > 0
+
+    return matchesSearch && matchesQuantityFilter
+  })
+
+  // Count of depleted items
+  const depletedCount = inventory.filter((inv) => inv.quantity === 0).length
 
   async function handleAddInventory(e: React.FormEvent) {
     e.preventDefault()
@@ -167,6 +179,79 @@ export function InventoryList({
   async function handleRemoveItem(inventoryId: string) {
     const supabase = createClient()
     await supabase.from('inventory').delete().eq('id', inventoryId)
+    router.refresh()
+  }
+
+  async function handleQuantityChange(inv: InventoryItem, delta: number) {
+    if (!inv.items) return
+
+    setUpdatingId(inv.id)
+    const supabase = createClient()
+    const newQuantity = Math.max(0, inv.quantity + delta)
+
+    // Update inventory quantity
+    const { error: updateError } = await supabase
+      .from('inventory')
+      .update({ quantity: newQuantity })
+      .eq('id', inv.id)
+
+    if (updateError) {
+      toast.error('Failed to update quantity')
+      setUpdatingId(null)
+      return
+    }
+
+    // Log the change
+    const action = delta > 0 ? 'added' : 'used'
+    await supabase.from('inventory_log').insert({
+      inventory_id: inv.id,
+      item_id: inv.items.id,
+      action,
+      quantity_change: delta,
+      performed_by: userId,
+      notes: delta > 0 ? 'Added via quick add' : 'Used via quick subtract',
+    })
+
+    if (newQuantity === 0) {
+      toast.success(`${inv.items.name} is now depleted`)
+    } else {
+      toast.success(`${inv.items.name}: ${inv.quantity} → ${newQuantity} ${inv.unit}`)
+    }
+
+    setUpdatingId(null)
+    router.refresh()
+  }
+
+  async function handleRestockItem(inv: InventoryItem) {
+    if (!inv.items) return
+
+    setUpdatingId(inv.id)
+    const supabase = createClient()
+
+    // Restore to 1 if depleted
+    const { error } = await supabase
+      .from('inventory')
+      .update({ quantity: 1 })
+      .eq('id', inv.id)
+
+    if (error) {
+      toast.error('Failed to restock item')
+      setUpdatingId(null)
+      return
+    }
+
+    // Log the restock
+    await supabase.from('inventory_log').insert({
+      inventory_id: inv.id,
+      item_id: inv.items.id,
+      action: 'added',
+      quantity_change: 1,
+      performed_by: userId,
+      notes: 'Restocked from depleted',
+    })
+
+    toast.success(`${inv.items.name} restocked`)
+    setUpdatingId(null)
     router.refresh()
   }
 
@@ -376,14 +461,24 @@ export function InventoryList({
         </Dialog>
       </div>
 
-      {/* Search */}
-      <div>
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
         <Input
           placeholder="Search items, categories, or storage..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-md"
         />
+        {depletedCount > 0 && (
+          <Button
+            variant={showDepleted ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setShowDepleted(!showDepleted)}
+            className="w-fit"
+          >
+            {showDepleted ? 'Hide' : 'Show'} depleted ({depletedCount})
+          </Button>
+        )}
       </div>
 
       {/* No storage warning */}
@@ -417,41 +512,89 @@ export function InventoryList({
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredInventory.map((inv) => (
-            <Card key={inv.id}>
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="text-2xl">
-                      {typeIcons[inv.shelves?.storage_units?.type || 'other']}
-                    </div>
-                    <div>
-                      <div className="font-medium">{inv.items?.name}</div>
-                      <div className="text-sm text-gray-500">
-                        {inv.quantity} {inv.unit} • {inv.shelves?.storage_units?.name} - {inv.shelves?.name}
+          {filteredInventory.map((inv) => {
+            const isDepleted = inv.quantity === 0
+            const isUpdating = updatingId === inv.id
+
+            return (
+              <Card key={inv.id} className={isDepleted ? 'opacity-60 bg-gray-50' : ''}>
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <div className="text-2xl flex-shrink-0">
+                        {typeIcons[inv.shelves?.storage_units?.type || 'other']}
                       </div>
-                      {inv.items?.category && (
-                        <Badge variant="outline" className="mt-1">
-                          {inv.items.category}
-                        </Badge>
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{inv.items?.name}</div>
+                        <div className="text-sm text-gray-500">
+                          {inv.shelves?.storage_units?.name} - {inv.shelves?.name}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          {inv.items?.category && (
+                            <Badge variant="outline">
+                              {inv.items.category}
+                            </Badge>
+                          )}
+                          {getExpirationBadge(inv.expiration_date)}
+                          {isDepleted && (
+                            <Badge variant="secondary">Depleted</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quantity Controls */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {isDepleted ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRestockItem(inv)}
+                          disabled={isUpdating}
+                          className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                        >
+                          {isUpdating ? '...' : 'Restock'}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 text-lg font-bold"
+                            onClick={() => handleQuantityChange(inv, -1)}
+                            disabled={isUpdating}
+                          >
+                            -
+                          </Button>
+                          <div className="w-16 text-center">
+                            <div className="font-semibold">{inv.quantity}</div>
+                            <div className="text-xs text-gray-500">{inv.unit}</div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 text-lg font-bold"
+                            onClick={() => handleQuantityChange(inv, 1)}
+                            disabled={isUpdating}
+                          >
+                            +
+                          </Button>
+                        </>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:bg-red-50 ml-2"
+                        onClick={() => handleRemoveItem(inv.id)}
+                      >
+                        Remove
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {getExpirationBadge(inv.expiration_date)}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-600 hover:bg-red-50"
-                      onClick={() => handleRemoveItem(inv.id)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
     </div>
