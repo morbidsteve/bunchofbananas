@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { SharingSettings } from '@/components/settings/sharing-settings'
+import { MemberManagement } from '@/components/settings/member-management'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -9,7 +11,7 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Get user's household with members
+  // Get user's household with full details
   const { data: membership } = await supabase
     .from('household_members')
     .select(`
@@ -18,6 +20,8 @@ export default async function SettingsPage() {
       households (
         id,
         name,
+        is_public,
+        share_token,
         created_at
       )
     `)
@@ -37,7 +41,23 @@ export default async function SettingsPage() {
     `)
     .eq('household_id', membership.household_id)
 
-  const household = membership.households as unknown as { id: string; name: string; created_at: string }
+  // Get pending invites
+  const { data: invites } = await supabase
+    .from('household_invites')
+    .select('*')
+    .eq('household_id', membership.household_id)
+    .is('accepted_at', null)
+    .gt('expires_at', new Date().toISOString())
+
+  const household = membership.households as unknown as {
+    id: string
+    name: string
+    is_public: boolean
+    share_token: string
+    created_at: string
+  }
+
+  const isOwner = membership.role === 'owner'
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -92,47 +112,24 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Sharing Settings - Only for owners */}
+      {isOwner && (
+        <SharingSettings
+          householdId={household.id}
+          isPublic={household.is_public}
+          shareToken={household.share_token}
+        />
+      )}
+
       {/* Members */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Household Members</CardTitle>
-          <CardDescription>
-            {members?.length || 0} member{(members?.length || 0) !== 1 ? 's' : ''}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {members?.map((member) => (
-              <div
-                key={member.id}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                    <span className="text-amber-700 font-medium">
-                      {member.user_id === user.id ? 'You' : '?'}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-medium">
-                      {member.user_id === user.id ? user.email : 'Member'}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Joined {new Date(member.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-                <Badge variant={member.role === 'owner' ? 'default' : 'secondary'}>
-                  {member.role}
-                </Badge>
-              </div>
-            ))}
-          </div>
-          <p className="text-sm text-gray-500 mt-4">
-            Member invitation feature coming soon!
-          </p>
-        </CardContent>
-      </Card>
+      <MemberManagement
+        members={members || []}
+        invites={invites || []}
+        currentUserId={user.id}
+        currentUserEmail={user.email || ''}
+        householdId={membership.household_id}
+        isOwner={isOwner}
+      />
     </div>
   )
 }

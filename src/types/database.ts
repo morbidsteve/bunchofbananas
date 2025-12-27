@@ -13,20 +13,61 @@ export type Database = {
         Row: {
           id: string
           name: string
+          is_public: boolean
+          share_token: string
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
           name: string
+          is_public?: boolean
+          share_token?: string
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           name?: string
+          is_public?: boolean
+          share_token?: string
           created_at?: string
           updated_at?: string
+        }
+      }
+      household_invites: {
+        Row: {
+          id: string
+          household_id: string
+          email: string
+          role: 'owner' | 'member'
+          invited_by: string
+          token: string
+          expires_at: string
+          accepted_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          email: string
+          role?: 'owner' | 'member'
+          invited_by: string
+          token?: string
+          expires_at?: string
+          accepted_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          email?: string
+          role?: 'owner' | 'member'
+          invited_by?: string
+          token?: string
+          expires_at?: string
+          accepted_at?: string | null
+          created_at?: string
         }
       }
       household_members: {
@@ -306,6 +347,7 @@ export type UpdateTables<T extends keyof Database['public']['Tables']> = Databas
 // Convenience type aliases
 export type Household = Tables<'households'>
 export type HouseholdMember = Tables<'household_members'>
+export type HouseholdInvite = Tables<'household_invites'>
 export type StorageUnit = Tables<'storage_units'>
 export type Shelf = Tables<'shelves'>
 export type Item = Tables<'items'>
