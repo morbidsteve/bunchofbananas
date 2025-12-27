@@ -33,6 +33,7 @@ interface MemberManagementProps {
   currentUserId: string
   currentUserEmail: string
   householdId: string
+  householdName: string
   isOwner: boolean
   invitesEnabled?: boolean
 }
@@ -43,6 +44,7 @@ export function MemberManagement({
   currentUserId,
   currentUserEmail,
   householdId,
+  householdName,
   isOwner,
   invitesEnabled = true,
 }: MemberManagementProps) {
@@ -91,21 +93,48 @@ export function MemberManagement({
       return
     }
 
-    const { error } = await supabase.from('household_invites').insert({
-      household_id: householdId,
-      email: inviteForm.email.toLowerCase(),
-      role: inviteForm.role,
-      invited_by: currentUserId,
-    })
+    const { data: newInvite, error } = await supabase
+      .from('household_invites')
+      .insert({
+        household_id: householdId,
+        email: inviteForm.email.toLowerCase(),
+        role: inviteForm.role,
+        invited_by: currentUserId,
+      })
+      .select('token')
+      .single()
 
     if (error) {
       toast.error('Failed to send invite')
-    } else {
-      toast.success(`Invite sent to ${inviteForm.email}`)
-      setDialogOpen(false)
-      setInviteForm({ email: '', role: 'member' })
-      router.refresh()
+      setLoading(false)
+      return
     }
+
+    // Send invite email
+    try {
+      const emailResponse = await fetch('/api/invite/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteForm.email.toLowerCase(),
+          householdName,
+          inviterName: currentUserEmail,
+          token: newInvite.token,
+          role: inviteForm.role,
+        }),
+      })
+
+      if (!emailResponse.ok) {
+        console.warn('Email sending failed, but invite was created')
+      }
+    } catch (emailError) {
+      console.warn('Email sending failed:', emailError)
+    }
+
+    toast.success(`Invite sent to ${inviteForm.email}`)
+    setDialogOpen(false)
+    setInviteForm({ email: '', role: 'member' })
+    router.refresh()
 
     setLoading(false)
   }

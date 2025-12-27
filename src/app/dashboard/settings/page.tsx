@@ -156,6 +156,7 @@ export default async function SettingsPage() {
         currentUserId={user.id}
         currentUserEmail={user.email || ''}
         householdId={membership.household_id}
+        householdName={household.name}
         isOwner={isOwner}
         invitesEnabled={sharingEnabled}
       />

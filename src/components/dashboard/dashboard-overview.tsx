@@ -2,9 +2,17 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface ExpiringItem {
   id: string
@@ -41,10 +49,25 @@ interface PriorityItem {
   } | null
 }
 
-interface RecipeSuggestion {
+interface RecipeIngredient {
+  name: string
+  measure: string
+  inStock: boolean
+}
+
+interface Recipe {
+  id: string
   title: string
+  image: string
   url: string
-  description: string
+  youtubeUrl: string | null
+  category: string
+  area: string
+  instructions: string
+  ingredients: RecipeIngredient[]
+  matchedCount: number
+  totalIngredients: number
+  matchPercentage: number
 }
 
 interface DashboardOverviewProps {
@@ -65,15 +88,16 @@ export function DashboardOverview({
   allInventoryItems = [],
 }: DashboardOverviewProps) {
   const today = new Date()
-  const [recipes, setRecipes] = useState<RecipeSuggestion[]>([])
+  const [recipes, setRecipes] = useState<Recipe[]>([])
   const [loadingRecipes, setLoadingRecipes] = useState(false)
   const [recipeError, setRecipeError] = useState('')
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
 
   async function searchRecipes() {
     // Combine priority items with some regular items for recipe search
-    const priorityIngredients = priorityItems.map(p => p.items?.name).filter(Boolean)
+    const priorityIngredients = priorityItems.map(p => p.items?.name).filter(Boolean) as string[]
     const otherIngredients = allInventoryItems.filter(item => !priorityIngredients.includes(item)).slice(0, 5)
-    const ingredients = [...priorityIngredients, ...otherIngredients].slice(0, 8)
+    const ingredients = [...priorityIngredients, ...otherIngredients].slice(0, 10)
 
     if (ingredients.length === 0) {
       setRecipeError('No items in inventory to search recipes for')
@@ -117,6 +141,12 @@ export function DashboardOverview({
     } else {
       return <Badge variant="secondary">{days} days</Badge>
     }
+  }
+
+  function getMatchBadgeColor(percentage: number) {
+    if (percentage >= 70) return 'bg-green-500'
+    if (percentage >= 40) return 'bg-yellow-500'
+    return 'bg-gray-400'
   }
 
   return (
@@ -290,19 +320,39 @@ export function DashboardOverview({
             )}
             {recipes.length > 0 && (
               <div className="mt-4 pt-4 border-t border-orange-200">
-                <h4 className="font-semibold text-gray-700 mb-3">🍽️ Recipe Ideas</h4>
-                <div className="space-y-2">
-                  {recipes.map((recipe, idx) => (
-                    <a
-                      key={idx}
-                      href={recipe.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block p-3 bg-white border border-orange-100 rounded-lg hover:border-orange-300 transition-colors"
+                <h4 className="font-semibold text-gray-700 mb-3">🍽️ Recipe Ideas ({recipes.length} found)</h4>
+                <div className="grid md:grid-cols-2 gap-3">
+                  {recipes.map((recipe) => (
+                    <div
+                      key={recipe.id}
+                      className="bg-white border border-orange-100 rounded-lg overflow-hidden hover:border-orange-300 transition-colors cursor-pointer"
+                      onClick={() => setSelectedRecipe(recipe)}
                     >
-                      <p className="font-medium text-orange-700">{recipe.title}</p>
-                      <p className="text-sm text-gray-600">{recipe.description}</p>
-                    </a>
+                      <div className="flex">
+                        {recipe.image && (
+                          <div className="w-24 h-24 flex-shrink-0 relative">
+                            <Image
+                              src={recipe.image}
+                              alt={recipe.title}
+                              fill
+                              className="object-cover"
+                              sizes="96px"
+                            />
+                          </div>
+                        )}
+                        <div className="p-3 flex-1 min-w-0">
+                          <p className="font-medium text-orange-700 truncate">{recipe.title}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge className={getMatchBadgeColor(recipe.matchPercentage)}>
+                              {recipe.matchedCount}/{recipe.totalIngredients} ingredients
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {recipe.category} • {recipe.area}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -339,18 +389,38 @@ export function DashboardOverview({
                 <p className="text-red-500 text-sm">{recipeError}</p>
               )}
               {recipes.length > 0 && (
-                <div className="space-y-2">
-                  {recipes.map((recipe, idx) => (
-                    <a
-                      key={idx}
-                      href={recipe.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                <div className="grid md:grid-cols-2 gap-3">
+                  {recipes.map((recipe) => (
+                    <div
+                      key={recipe.id}
+                      className="bg-gray-50 border rounded-lg overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer"
+                      onClick={() => setSelectedRecipe(recipe)}
                     >
-                      <p className="font-medium">{recipe.title}</p>
-                      <p className="text-sm text-gray-600">{recipe.description}</p>
-                    </a>
+                      <div className="flex">
+                        {recipe.image && (
+                          <div className="w-24 h-24 flex-shrink-0 relative">
+                            <Image
+                              src={recipe.image}
+                              alt={recipe.title}
+                              fill
+                              className="object-cover"
+                              sizes="96px"
+                            />
+                          </div>
+                        )}
+                        <div className="p-3 flex-1 min-w-0">
+                          <p className="font-medium truncate">{recipe.title}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge className={getMatchBadgeColor(recipe.matchPercentage)}>
+                              {recipe.matchedCount}/{recipe.totalIngredients} ingredients
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {recipe.category} • {recipe.area}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -358,6 +428,101 @@ export function DashboardOverview({
           )}
         </Card>
       )}
+
+      {/* Recipe Detail Modal */}
+      <Dialog open={!!selectedRecipe} onOpenChange={() => setSelectedRecipe(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedRecipe && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl">{selectedRecipe.title}</DialogTitle>
+                <DialogDescription>
+                  {selectedRecipe.category} • {selectedRecipe.area}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                {/* Image */}
+                {selectedRecipe.image && (
+                  <div className="relative w-full h-48 rounded-lg overflow-hidden">
+                    <Image
+                      src={selectedRecipe.image}
+                      alt={selectedRecipe.title}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 600px"
+                    />
+                  </div>
+                )}
+
+                {/* Match info */}
+                <div className="flex items-center gap-2">
+                  <Badge className={getMatchBadgeColor(selectedRecipe.matchPercentage)}>
+                    {selectedRecipe.matchPercentage}% match
+                  </Badge>
+                  <span className="text-sm text-gray-600">
+                    You have {selectedRecipe.matchedCount} of {selectedRecipe.totalIngredients} ingredients
+                  </span>
+                </div>
+
+                {/* Ingredients */}
+                <div>
+                  <h4 className="font-semibold mb-2">Ingredients</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {selectedRecipe.ingredients.map((ing, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-2 rounded text-sm ${
+                          ing.inStock ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-600'
+                        }`}
+                      >
+                        <span className="mr-1">{ing.inStock ? '✓' : '○'}</span>
+                        {ing.measure} {ing.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <div>
+                  <h4 className="font-semibold mb-2">Instructions</h4>
+                  <div className="text-sm text-gray-700 whitespace-pre-line max-h-64 overflow-y-auto">
+                    {selectedRecipe.instructions}
+                  </div>
+                </div>
+
+                {/* Links */}
+                <div className="flex gap-2 pt-2 border-t">
+                  {selectedRecipe.url && (
+                    <a
+                      href={selectedRecipe.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1"
+                    >
+                      <Button variant="outline" className="w-full">
+                        View Original Recipe
+                      </Button>
+                    </a>
+                  )}
+                  {selectedRecipe.youtubeUrl && (
+                    <a
+                      href={selectedRecipe.youtubeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1"
+                    >
+                      <Button variant="outline" className="w-full">
+                        Watch Video
+                      </Button>
+                    </a>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Empty State */}
       {storageCount === 0 && (

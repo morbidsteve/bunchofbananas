@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Recipe suggestion API using TheMealDB (free, no auth required)
-// Falls back to curated suggestions based on ingredients
+// Returns multiple recipes with full details and ingredient matching
 
 interface MealDBMeal {
   idMeal: string
@@ -9,6 +9,56 @@ interface MealDBMeal {
   strMealThumb: string
   strSource: string
   strInstructions: string
+  strCategory: string
+  strArea: string
+  strYoutube: string
+  [key: string]: string | undefined
+}
+
+interface RecipeIngredient {
+  name: string
+  measure: string
+  inStock: boolean
+}
+
+interface Recipe {
+  id: string
+  title: string
+  image: string
+  url: string
+  youtubeUrl: string | null
+  category: string
+  area: string
+  instructions: string
+  ingredients: RecipeIngredient[]
+  matchedCount: number
+  totalIngredients: number
+  matchPercentage: number
+}
+
+function extractIngredients(meal: MealDBMeal, userIngredients: string[]): RecipeIngredient[] {
+  const ingredients: RecipeIngredient[] = []
+  const userIngredientsLower = userIngredients.map(i => i.toLowerCase())
+
+  for (let i = 1; i <= 20; i++) {
+    const ingredient = meal[`strIngredient${i}`]?.trim()
+    const measure = meal[`strMeasure${i}`]?.trim()
+
+    if (ingredient && ingredient !== '') {
+      const ingredientLower = ingredient.toLowerCase()
+      // Check if user has this ingredient (partial match)
+      const inStock = userIngredientsLower.some(
+        ui => ingredientLower.includes(ui) || ui.includes(ingredientLower)
+      )
+      ingredients.push({
+        name: ingredient,
+        measure: measure || '',
+        inStock,
+      })
+    }
+  }
+
+  return ingredients
 }
 
 export async function POST(request: NextRequest) {
@@ -19,70 +69,76 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ recipes: [] })
     }
 
-    const recipes: { title: string; url: string; description: string }[] = []
+    const recipes: Recipe[] = []
+    const seenMealIds = new Set<string>()
 
-    // Try to get recipes from TheMealDB (free API)
-    // Search by main ingredient (first priority item or first item)
-    const mainIngredient = ingredients[0]
+    // Search for recipes using multiple ingredients to get variety
+    const searchIngredients = ingredients.slice(0, 5)
 
-    try {
-      const response = await fetch(
-        `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(mainIngredient)}`
-      )
+    for (const ingredient of searchIngredients) {
+      try {
+        const response = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/filter.php?i=${encodeURIComponent(ingredient)}`
+        )
 
-      if (response.ok) {
+        if (!response.ok) continue
+
         const data = await response.json()
         const meals: MealDBMeal[] = data.meals || []
 
-        // Get details for up to 3 meals
-        for (const meal of meals.slice(0, 3)) {
+        // Get details for meals we haven't seen yet
+        for (const meal of meals.slice(0, 4)) {
+          if (seenMealIds.has(meal.idMeal)) continue
+          seenMealIds.add(meal.idMeal)
+
           try {
             const detailRes = await fetch(
               `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`
             )
-            if (detailRes.ok) {
-              const detailData = await detailRes.json()
-              const mealDetail = detailData.meals?.[0]
-              if (mealDetail) {
-                recipes.push({
-                  title: mealDetail.strMeal,
-                  url: mealDetail.strSource || `https://www.themealdb.com/meal/${meal.idMeal}`,
-                  description: mealDetail.strInstructions?.substring(0, 150) + '...' || 'A delicious recipe',
-                })
-              }
-            }
+            if (!detailRes.ok) continue
+
+            const detailData = await detailRes.json()
+            const mealDetail: MealDBMeal = detailData.meals?.[0]
+            if (!mealDetail) continue
+
+            const recipeIngredients = extractIngredients(mealDetail, ingredients)
+            const matchedCount = recipeIngredients.filter(i => i.inStock).length
+            const totalIngredients = recipeIngredients.length
+
+            recipes.push({
+              id: mealDetail.idMeal,
+              title: mealDetail.strMeal,
+              image: mealDetail.strMealThumb,
+              url: mealDetail.strSource || `https://www.themealdb.com/meal/${meal.idMeal}`,
+              youtubeUrl: mealDetail.strYoutube || null,
+              category: mealDetail.strCategory || '',
+              area: mealDetail.strArea || '',
+              instructions: mealDetail.strInstructions || '',
+              ingredients: recipeIngredients,
+              matchedCount,
+              totalIngredients,
+              matchPercentage: totalIngredients > 0 ? Math.round((matchedCount / totalIngredients) * 100) : 0,
+            })
           } catch {
             // Skip this meal if we can't get details
           }
         }
+      } catch {
+        // Skip this ingredient if fetch fails
       }
-    } catch {
-      // TheMealDB failed, use fallback
+
+      // Stop if we have enough recipes
+      if (recipes.length >= 10) break
     }
 
-    // If no recipes found, provide helpful suggestions
-    if (recipes.length === 0) {
-      const ingredientList = ingredients.slice(0, 3).join(', ')
-      recipes.push(
-        {
-          title: `Recipes with ${ingredientList}`,
-          url: `https://www.google.com/search?q=recipe+with+${encodeURIComponent(ingredients.join('+'))}`,
-          description: `Search Google for recipes using your ingredients`,
-        },
-        {
-          title: `AllRecipes - ${mainIngredient}`,
-          url: `https://www.allrecipes.com/search?q=${encodeURIComponent(mainIngredient)}`,
-          description: `Find recipes featuring ${mainIngredient} on AllRecipes`,
-        },
-        {
-          title: `Tasty - ${mainIngredient} recipes`,
-          url: `https://tasty.co/search?q=${encodeURIComponent(mainIngredient)}`,
-          description: `Video recipes with ${mainIngredient} on Tasty`,
-        }
-      )
-    }
+    // Sort recipes by match percentage (best matches first)
+    recipes.sort((a, b) => b.matchPercentage - a.matchPercentage)
 
-    return NextResponse.json({ recipes })
+    // Return top 8 recipes
+    return NextResponse.json({
+      recipes: recipes.slice(0, 8),
+      searchedIngredients: ingredients,
+    })
   } catch {
     return NextResponse.json(
       { error: 'Failed to fetch recipes' },
