@@ -626,14 +626,14 @@ export function InventoryList({
                     <Label>Store</Label>
                     {stores.length > 0 ? (
                       <Select
-                        value={formData.storeId}
-                        onValueChange={(value) => setFormData({ ...formData, storeId: value, newStoreName: '' })}
+                        value={formData.storeId || 'none'}
+                        onValueChange={(value) => setFormData({ ...formData, storeId: value === 'none' ? '' : value, newStoreName: '' })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select store" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {stores.map((store) => (
                             <SelectItem key={store.id} value={store.id}>
                               {store.name}
