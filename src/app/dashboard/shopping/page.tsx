@@ -42,5 +42,29 @@ export default async function ShoppingPage() {
     .eq('items.household_id', membership.household_id)
     .order('items(name)')
 
-  return <ShoppingMode inventory={(inventory || []) as any} />
+  // Get all items with their total inventory to find depleted ones
+  const { data: items } = await supabase
+    .from('items')
+    .select(`
+      id,
+      name,
+      category,
+      inventory (
+        quantity
+      )
+    `)
+    .eq('household_id', membership.household_id)
+    .order('name')
+
+  // Calculate depleted items (items with 0 total quantity across all locations)
+  const depletedItems = (items || []).filter(item => {
+    const totalQty = item.inventory?.reduce((sum: number, inv: { quantity: number }) => sum + inv.quantity, 0) || 0
+    return item.inventory && item.inventory.length > 0 && totalQty === 0
+  }).map(item => ({
+    id: item.id,
+    name: item.name,
+    category: item.category,
+  }))
+
+  return <ShoppingMode inventory={(inventory || []) as any} depletedItems={depletedItems} />
 }

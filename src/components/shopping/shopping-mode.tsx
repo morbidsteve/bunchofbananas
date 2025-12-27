@@ -24,8 +24,15 @@ interface InventoryItem {
   } | null
 }
 
+interface DepletedItem {
+  id: string
+  name: string
+  category: string | null
+}
+
 interface ShoppingModeProps {
   inventory: InventoryItem[]
+  depletedItems?: DepletedItem[]
 }
 
 const typeIcons: Record<string, string> = {
@@ -36,8 +43,9 @@ const typeIcons: Record<string, string> = {
   other: '📦',
 }
 
-export function ShoppingMode({ inventory }: ShoppingModeProps) {
+export function ShoppingMode({ inventory, depletedItems = [] }: ShoppingModeProps) {
   const [search, setSearch] = useState('')
+  const [showRestockList, setShowRestockList] = useState(true)
 
   const filteredInventory = search.length >= 2
     ? inventory.filter((inv) =>
@@ -167,6 +175,51 @@ export function ShoppingMode({ inventory }: ShoppingModeProps) {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Needs Restocking Section */}
+      {depletedItems.length > 0 && (
+        <div className="max-w-lg mx-auto mt-8 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <span>📝</span> Needs Restocking ({depletedItems.length})
+            </h2>
+            <button
+              onClick={() => setShowRestockList(!showRestockList)}
+              className="text-sm text-amber-600 hover:underline"
+            >
+              {showRestockList ? 'Hide' : 'Show'}
+            </button>
+          </div>
+
+          {showRestockList && (
+            <Card className="border-amber-200 bg-amber-50">
+              <CardContent className="py-4">
+                <p className="text-sm text-amber-800 mb-3">
+                  These items are depleted and may need to be purchased:
+                </p>
+                <div className="space-y-2">
+                  {depletedItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-amber-200"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🛒</span>
+                        <span className="font-medium">{item.name}</span>
+                      </div>
+                      {item.category && (
+                        <Badge variant="outline" className="text-xs">
+                          {item.category}
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   )

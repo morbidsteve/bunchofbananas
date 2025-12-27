@@ -34,6 +34,7 @@ interface MemberManagementProps {
   currentUserEmail: string
   householdId: string
   isOwner: boolean
+  invitesEnabled?: boolean
 }
 
 export function MemberManagement({
@@ -43,6 +44,7 @@ export function MemberManagement({
   currentUserEmail,
   householdId,
   isOwner,
+  invitesEnabled = true,
 }: MemberManagementProps) {
   const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -151,7 +153,7 @@ export function MemberManagement({
               {invites.length > 0 && ` • ${invites.length} pending invite${invites.length !== 1 ? 's' : ''}`}
             </CardDescription>
           </div>
-          {isOwner && (
+          {isOwner && invitesEnabled && (
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="bg-amber-500 hover:bg-amber-600">

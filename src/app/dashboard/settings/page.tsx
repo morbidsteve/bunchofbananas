@@ -20,8 +20,6 @@ export default async function SettingsPage() {
       households (
         id,
         name,
-        is_public,
-        share_token,
         created_at
       )
     `)
@@ -29,6 +27,18 @@ export default async function SettingsPage() {
     .single()
 
   if (!membership) redirect('/dashboard')
+
+  // Try to get sharing settings (may not exist if migration hasn't run)
+  const { data: householdSharing } = await supabase
+    .from('households')
+    .select('is_public, share_token')
+    .eq('id', membership.household_id)
+    .single()
+
+  // Sharing settings (may be null if migration hasn't run)
+  const sharingEnabled = householdSharing?.is_public !== undefined
+  const isPublic = householdSharing?.is_public ?? false
+  const shareToken = householdSharing?.share_token ?? ''
 
   // Get all household members
   const { data: members } = await supabase
@@ -41,19 +51,21 @@ export default async function SettingsPage() {
     `)
     .eq('household_id', membership.household_id)
 
-  // Get pending invites
-  const { data: invites } = await supabase
-    .from('household_invites')
-    .select('*')
-    .eq('household_id', membership.household_id)
-    .is('accepted_at', null)
-    .gt('expires_at', new Date().toISOString())
+  // Get pending invites (may fail if migration hasn't run)
+  let invites: any[] = []
+  if (sharingEnabled) {
+    const { data: inviteData } = await supabase
+      .from('household_invites')
+      .select('*')
+      .eq('household_id', membership.household_id)
+      .is('accepted_at', null)
+      .gt('expires_at', new Date().toISOString())
+    invites = inviteData || []
+  }
 
   const household = membership.households as unknown as {
     id: string
     name: string
-    is_public: boolean
-    share_token: string
     created_at: string
   }
 
@@ -113,22 +125,39 @@ export default async function SettingsPage() {
       </Card>
 
       {/* Sharing Settings - Only for owners */}
-      {isOwner && (
+      {isOwner && sharingEnabled && (
         <SharingSettings
           householdId={household.id}
-          isPublic={household.is_public}
-          shareToken={household.share_token}
+          isPublic={isPublic}
+          shareToken={shareToken}
         />
+      )}
+
+      {isOwner && !sharingEnabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Public Sharing</CardTitle>
+            <CardDescription>
+              Sharing features are not yet enabled
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600">
+              Run the database migration (004_add_sharing_and_invites.sql) to enable sharing and invite features.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {/* Members */}
       <MemberManagement
         members={members || []}
-        invites={invites || []}
+        invites={invites}
         currentUserId={user.id}
         currentUserEmail={user.email || ''}
         householdId={membership.household_id}
         isOwner={isOwner}
+        invitesEnabled={sharingEnabled}
       />
     </div>
   )
