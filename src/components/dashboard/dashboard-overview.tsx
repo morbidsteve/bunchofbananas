@@ -66,8 +66,8 @@ interface RecipeIngredient {
 interface Recipe {
   id: string
   title: string
-  image: string
-  url: string
+  image: string | null
+  url: string | null
   youtubeUrl: string | null
   category: string
   area: string
@@ -76,6 +76,8 @@ interface Recipe {
   matchedCount: number
   totalIngredients: number
   matchPercentage: number
+  isUserRecipe?: boolean
+  shareToken?: string
 }
 
 interface InventoryItemRef {
@@ -312,7 +314,7 @@ export function DashboardOverview({
       const response = await fetch('/api/recipes/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients }),
+        body: JSON.stringify({ ingredients, householdId }),
       })
 
       if (!response.ok) throw new Error('Failed to fetch recipes')
@@ -768,15 +770,27 @@ export function DashboardOverview({
                             />
                           </div>
                         )}
+                        {!recipe.image && recipe.isUserRecipe && (
+                          <div className="w-24 h-24 flex-shrink-0 bg-amber-100 flex items-center justify-center text-3xl">
+                            📖
+                          </div>
+                        )}
                         <div className="p-3 flex-1 min-w-0">
-                          <p className="font-medium text-orange-700 truncate">{recipe.title}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-orange-700 truncate">{recipe.title}</p>
+                            {recipe.isUserRecipe && (
+                              <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300">
+                                My Recipe
+                              </Badge>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-1">
                             <Badge className={getMatchBadgeColor(recipe.matchPercentage)}>
                               {recipe.matchedCount}/{recipe.totalIngredients} ingredients
                             </Badge>
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
-                            {recipe.category} • {recipe.area}
+                            {recipe.category} {recipe.category && recipe.area && '•'} {recipe.area}
                           </p>
                         </div>
                       </div>
@@ -888,15 +902,27 @@ export function DashboardOverview({
                           />
                         </div>
                       )}
+                      {!recipe.image && recipe.isUserRecipe && (
+                        <div className="w-24 h-24 flex-shrink-0 bg-amber-100 flex items-center justify-center text-3xl">
+                          📖
+                        </div>
+                      )}
                       <div className="p-3 flex-1 min-w-0">
-                        <p className="font-medium truncate">{recipe.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">{recipe.title}</p>
+                          {recipe.isUserRecipe && (
+                            <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300">
+                              My Recipe
+                            </Badge>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge className={getMatchBadgeColor(recipe.matchPercentage)}>
                             {recipe.matchedCount}/{recipe.totalIngredients} ingredients
                           </Badge>
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
-                          {recipe.category} • {recipe.area}
+                          {recipe.category} {recipe.category && recipe.area && '•'} {recipe.area}
                         </p>
                       </div>
                     </div>
@@ -914,9 +940,16 @@ export function DashboardOverview({
           {selectedRecipe && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-xl">{selectedRecipe.title}</DialogTitle>
+                <div className="flex items-center gap-2">
+                  <DialogTitle className="text-xl">{selectedRecipe.title}</DialogTitle>
+                  {selectedRecipe.isUserRecipe && (
+                    <Badge variant="outline" className="bg-amber-50 border-amber-300">
+                      My Recipe
+                    </Badge>
+                  )}
+                </div>
                 <DialogDescription>
-                  {selectedRecipe.category} • {selectedRecipe.area}
+                  {selectedRecipe.category} {selectedRecipe.category && selectedRecipe.area && '•'} {selectedRecipe.area}
                 </DialogDescription>
               </DialogHeader>
 
@@ -972,29 +1005,39 @@ export function DashboardOverview({
 
                 {/* Links */}
                 <div className="flex gap-2 pt-2 border-t">
-                  {selectedRecipe.url && (
-                    <a
-                      href={selectedRecipe.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1"
-                    >
+                  {selectedRecipe.isUserRecipe ? (
+                    <Link href="/dashboard/recipes" className="flex-1">
                       <Button variant="outline" className="w-full">
-                        View Original Recipe
+                        View in My Recipes
                       </Button>
-                    </a>
-                  )}
-                  {selectedRecipe.youtubeUrl && (
-                    <a
-                      href={selectedRecipe.youtubeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1"
-                    >
-                      <Button variant="outline" className="w-full">
-                        Watch Video
-                      </Button>
-                    </a>
+                    </Link>
+                  ) : (
+                    <>
+                      {selectedRecipe.url && (
+                        <a
+                          href={selectedRecipe.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1"
+                        >
+                          <Button variant="outline" className="w-full">
+                            View Original Recipe
+                          </Button>
+                        </a>
+                      )}
+                      {selectedRecipe.youtubeUrl && (
+                        <a
+                          href={selectedRecipe.youtubeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1"
+                        >
+                          <Button variant="outline" className="w-full">
+                            Watch Video
+                          </Button>
+                        </a>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

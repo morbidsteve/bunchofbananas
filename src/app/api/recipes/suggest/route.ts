@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
-// Recipe suggestion API using TheMealDB (free, no auth required)
+// Recipe suggestion API using TheMealDB + user recipes
 // Returns multiple recipes with full details and ingredient matching
 
 interface MealDBMeal {
@@ -24,8 +25,8 @@ interface RecipeIngredient {
 interface Recipe {
   id: string
   title: string
-  image: string
-  url: string
+  image: string | null
+  url: string | null
   youtubeUrl: string | null
   category: string
   area: string
@@ -34,6 +35,8 @@ interface Recipe {
   matchedCount: number
   totalIngredients: number
   matchPercentage: number
+  isUserRecipe?: boolean
+  shareToken?: string
 }
 
 // Normalize ingredient name for matching (remove adjectives, quantities, etc.)
@@ -108,7 +111,7 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const { ingredients } = await request.json()
+    const { ingredients, householdId } = await request.json()
 
     if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
       return NextResponse.json({ recipes: [] })
@@ -116,6 +119,58 @@ export async function POST(request: NextRequest) {
 
     const recipes: Recipe[] = []
     const seenMealIds = new Set<string>()
+
+    // Fetch user recipes if householdId is provided
+    if (householdId) {
+      try {
+        const supabase = await createClient()
+        const { data: userRecipes } = await supabase
+          .from('user_recipes')
+          .select(`
+            *,
+            recipe_ingredients (*)
+          `)
+          .eq('household_id', householdId)
+
+        if (userRecipes) {
+          for (const recipe of userRecipes) {
+            const recipeIngredients: RecipeIngredient[] = (recipe.recipe_ingredients || []).map(
+              (ing: { name: string; quantity: string | null; unit: string | null }) => ({
+                name: ing.name,
+                measure: ing.quantity ? `${ing.quantity} ${ing.unit || ''}`.trim() : '',
+                inStock: hasIngredient(ing.name, ingredients),
+              })
+            )
+
+            const matchedCount = recipeIngredients.filter(i => i.inStock).length
+            const totalIngredients = recipeIngredients.length
+
+            // Only include if at least one ingredient matches
+            if (matchedCount > 0) {
+              recipes.push({
+                id: `user-${recipe.id}`,
+                title: recipe.title,
+                image: recipe.image_path || null,
+                url: null,
+                youtubeUrl: null,
+                category: recipe.category || '',
+                area: recipe.cuisine || '',
+                instructions: recipe.instructions,
+                ingredients: recipeIngredients,
+                matchedCount,
+                totalIngredients,
+                matchPercentage: totalIngredients > 0 ? Math.round((matchedCount / totalIngredients) * 100) : 0,
+                isUserRecipe: true,
+                shareToken: recipe.share_token,
+              })
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user recipes:', error)
+        // Continue with TheMealDB even if user recipes fail
+      }
+    }
 
     // Shuffle ingredients to get different results each time
     const shuffledIngredients = shuffleArray(ingredients)
@@ -164,6 +219,7 @@ export async function POST(request: NextRequest) {
               matchedCount,
               totalIngredients,
               matchPercentage: totalIngredients > 0 ? Math.round((matchedCount / totalIngredients) * 100) : 0,
+              isUserRecipe: false,
             })
           } catch {
             // Skip this meal if we can't get details
@@ -174,15 +230,21 @@ export async function POST(request: NextRequest) {
       }
 
       // Stop if we have enough recipes
-      if (recipes.length >= 10) break
+      if (recipes.length >= 15) break
     }
 
-    // Sort recipes by match percentage (best matches first)
-    recipes.sort((a, b) => b.matchPercentage - a.matchPercentage)
+    // Sort recipes by match percentage (best matches first), user recipes first on tie
+    recipes.sort((a, b) => {
+      if (b.matchPercentage !== a.matchPercentage) {
+        return b.matchPercentage - a.matchPercentage
+      }
+      // Prefer user recipes on tie
+      return (b.isUserRecipe ? 1 : 0) - (a.isUserRecipe ? 1 : 0)
+    })
 
-    // Return top 8 recipes
+    // Return top 10 recipes
     return NextResponse.json({
-      recipes: recipes.slice(0, 8),
+      recipes: recipes.slice(0, 10),
       searchedIngredients: ingredients,
     })
   } catch {
