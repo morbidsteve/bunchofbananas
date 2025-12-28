@@ -102,6 +102,9 @@ export function PublicInventoryView({
   // Recipe state
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [loadingRecipes, setLoadingRecipes] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [currentPage, setCurrentPage] = useState(0)
   const [recipeError, setRecipeError] = useState('')
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
 
@@ -215,36 +218,53 @@ export function PublicInventoryView({
   const priorityCount = priorityItems.length
   const depletedCount = depletedItems.length
 
-  async function searchRecipes() {
+  async function searchRecipes(page = 0, append = false) {
     if (allItemNames.length === 0) {
       setRecipeError('No items in inventory to search recipes for')
       return
     }
 
-    setLoadingRecipes(true)
+    if (append) {
+      setLoadingMore(true)
+    } else {
+      setLoadingRecipes(true)
+      setRecipes([])
+    }
     setRecipeError('')
 
     try {
-      // Prioritize priority items in search
+      // Send ALL ingredients for accurate matching - API handles optimization
       const priorityIngredients = priorityItems.map((p) => p.items?.name).filter(Boolean) as string[]
       const otherIngredients = allItemNames.filter((name) => !priorityIngredients.includes(name))
-      const ingredients = [...priorityIngredients, ...otherIngredients].slice(0, 10)
+      const ingredients = [...priorityIngredients, ...otherIngredients]
 
       const response = await fetch('/api/recipes/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients }),
+        body: JSON.stringify({ ingredients, page, limit: 8 }),
       })
 
       if (!response.ok) throw new Error('Failed to fetch recipes')
 
       const data = await response.json()
-      setRecipes(data.recipes || [])
+      if (append) {
+        setRecipes(prev => [...prev, ...(data.recipes || [])])
+      } else {
+        setRecipes(data.recipes || [])
+      }
+      setHasMore(data.hasMore || false)
+      setCurrentPage(page)
     } catch {
       setRecipeError('Could not load recipe suggestions')
     } finally {
       setLoadingRecipes(false)
+      setLoadingMore(false)
     }
+  }
+
+  async function loadMoreRecipes() {
+    if (loadingMore || !hasMore) return
+    await searchRecipes(currentPage + 1, true)
   }
 
   function getExpirationBadge(dateStr: string | null) {
@@ -535,7 +555,7 @@ export function PublicInventoryView({
                   </CardDescription>
                 </div>
                 <Button
-                  onClick={searchRecipes}
+                  onClick={() => searchRecipes()}
                   disabled={loadingRecipes || allItemNames.length === 0}
                   className="bg-amber-500 hover:bg-amber-600"
                 >
@@ -555,40 +575,54 @@ export function PublicInventoryView({
               )}
 
               {recipes.length > 0 && (
-                <div className="grid md:grid-cols-2 gap-3">
-                  {recipes.map((recipe) => (
-                    <div
-                      key={recipe.id}
-                      className="bg-gray-50 border rounded-lg overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer"
-                      onClick={() => setSelectedRecipe(recipe)}
-                    >
-                      <div className="flex">
-                        {recipe.image && (
-                          <div className="w-24 h-24 flex-shrink-0 relative">
-                            <Image
-                              src={recipe.image}
-                              alt={recipe.title}
-                              fill
-                              className="object-cover"
-                              sizes="96px"
-                            />
+                <>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {recipes.map((recipe) => (
+                      <div
+                        key={recipe.id}
+                        className="bg-gray-50 border rounded-lg overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer"
+                        onClick={() => setSelectedRecipe(recipe)}
+                      >
+                        <div className="flex">
+                          {recipe.image && (
+                            <div className="w-24 h-24 flex-shrink-0 relative">
+                              <Image
+                                src={recipe.image}
+                                alt={recipe.title}
+                                fill
+                                className="object-cover"
+                                sizes="96px"
+                              />
+                            </div>
+                          )}
+                          <div className="p-3 flex-1 min-w-0">
+                            <p className="font-medium truncate">{recipe.title}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge className={getMatchBadgeColor(recipe.matchPercentage)}>
+                                {recipe.matchedCount}/{recipe.totalIngredients} ingredients
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {recipe.category} • {recipe.area}
+                            </p>
                           </div>
-                        )}
-                        <div className="p-3 flex-1 min-w-0">
-                          <p className="font-medium truncate">{recipe.title}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge className={getMatchBadgeColor(recipe.matchPercentage)}>
-                              {recipe.matchedCount}/{recipe.totalIngredients} ingredients
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {recipe.category} • {recipe.area}
-                          </p>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                  {hasMore && (
+                    <div className="flex justify-center mt-4">
+                      <Button
+                        onClick={loadMoreRecipes}
+                        disabled={loadingMore}
+                        variant="outline"
+                        className="w-full max-w-xs"
+                      >
+                        {loadingMore ? 'Loading more...' : 'Load More Recipes'}
+                      </Button>
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

@@ -260,10 +260,10 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const { ingredients, householdId } = await request.json()
+    const { ingredients, householdId, page = 0, limit = 8 } = await request.json()
 
     if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
-      return NextResponse.json({ recipes: [] })
+      return NextResponse.json({ recipes: [], hasMore: false })
     }
 
     const recipes: Recipe[] = []
@@ -387,12 +387,12 @@ export async function POST(request: NextRequest) {
         // Skip this ingredient if fetch fails
       }
 
-      // Stop if we have enough recipes
-      if (recipes.length >= 12) break
+      // Stop if we have enough recipes (fetch more to support pagination)
+      if (recipes.length >= 30) break
     }
 
     // Add some random recipes for variety (especially good for discovering new meals)
-    const randomCount = Math.max(0, 5 - Math.floor(recipes.length / 3))
+    const randomCount = Math.max(0, 8 - Math.floor(recipes.length / 4))
     for (let i = 0; i < randomCount; i++) {
       try {
         const response = await fetch('https://www.themealdb.com/api/json/v1/1/random.php')
@@ -417,10 +417,17 @@ export async function POST(request: NextRequest) {
       return (b.isUserRecipe ? 1 : 0) - (a.isUserRecipe ? 1 : 0)
     })
 
-    // Return top 10 recipes
+    // Paginate results
+    const startIndex = page * limit
+    const endIndex = startIndex + limit
+    const paginatedRecipes = recipes.slice(startIndex, endIndex)
+    const hasMore = endIndex < recipes.length
+
     return NextResponse.json({
-      recipes: recipes.slice(0, 10),
+      recipes: paginatedRecipes,
       searchedIngredients: ingredients,
+      hasMore,
+      total: recipes.length,
     })
   } catch {
     return NextResponse.json(
