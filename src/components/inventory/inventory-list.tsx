@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, lazy, Suspense } from 'react'
+import { useState, lazy, Suspense, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -189,6 +190,17 @@ export function InventoryList({
 
   // Count of priority items
   const priorityCount = inventory.filter((inv) => inv.priority !== 'normal' && inv.quantity > 0).length
+
+  // Virtualization for large lists (only if more than 20 items)
+  const parentRef = useRef<HTMLDivElement>(null)
+  const useVirtualization = filteredInventory.length > 20
+
+  const virtualizer = useVirtualizer({
+    count: filteredInventory.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 100, // Estimated row height
+    overscan: 5,
+  })
 
   async function handleAddInventory(e: React.FormEvent) {
     e.preventDefault()
@@ -1050,7 +1062,159 @@ export function InventoryList({
             </div>
           </CardContent>
         </Card>
+      ) : useVirtualization ? (
+        /* Virtualized list for large inventories */
+        <div
+          ref={parentRef}
+          className="h-[600px] overflow-auto"
+          style={{ contain: 'strict' }}
+        >
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const inv = filteredInventory[virtualRow.index]
+              const isDepleted = inv.quantity === 0
+              const isUpdating = updatingId === inv.id
+              const hasPriority = inv.priority && inv.priority !== 'normal'
+
+              return (
+                <div
+                  key={inv.id}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                  className="pb-3"
+                >
+                  <Card
+                    className={`h-full ${isDepleted ? 'opacity-60 bg-gray-50' : ''} ${
+                      inv.priority === 'urgent' ? 'border-red-300 bg-red-50' :
+                      inv.priority === 'use_soon' ? 'border-orange-300 bg-orange-50' : ''
+                    }`}
+                  >
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          <div className="text-2xl flex-shrink-0">
+                            {typeIcons[inv.shelves?.storage_units?.type || 'other']}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{inv.items?.name}</div>
+                            <div className="text-sm text-gray-500">
+                              {inv.shelves?.storage_units?.name} - {inv.shelves?.name}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {inv.items?.category && (
+                                <Badge variant="outline">
+                                  {inv.items.category}
+                                </Badge>
+                              )}
+                              {inv.priority === 'urgent' && (
+                                <Badge className="bg-red-500">Urgent</Badge>
+                              )}
+                              {inv.priority === 'use_soon' && (
+                                <Badge className="bg-orange-500">Use Soon</Badge>
+                              )}
+                              {getExpirationBadge(inv.expiration_date)}
+                              {isDepleted && (
+                                <Badge variant="secondary">Depleted</Badge>
+                              )}
+                            </div>
+                            {inv.condition_notes && (
+                              <p className="text-sm text-orange-700 mt-1 italic">
+                                {inv.condition_notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Quantity Controls */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {!isDepleted && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openPriorityDialog(inv)}
+                              className={hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-500'}
+                              aria-label={`Set priority for ${inv.items?.name}`}
+                            >
+                              ⚡
+                            </Button>
+                          )}
+                          {isDepleted ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRestockItem(inv)}
+                              disabled={isUpdating}
+                              className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                            >
+                              {isUpdating ? '...' : 'Restock'}
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 text-lg font-bold"
+                                onClick={() => handleQuantityChange(inv, -1)}
+                                disabled={isUpdating}
+                                aria-label={`Decrease quantity of ${inv.items?.name}`}
+                              >
+                                -
+                              </Button>
+                              <div className="w-16 text-center">
+                                <div className="font-semibold">{inv.quantity}</div>
+                                <div className="text-xs text-gray-500">{inv.unit}</div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 text-lg font-bold"
+                                onClick={() => handleQuantityChange(inv, 1)}
+                                disabled={isUpdating}
+                                aria-label={`Increase quantity of ${inv.items?.name}`}
+                              >
+                                +
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-gray-600 hover:bg-gray-100"
+                            onClick={() => openEditDialog(inv)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:bg-red-50"
+                            onClick={() => handleRemoveItem(inv.id)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       ) : (
+        /* Regular list for small inventories */
         <div className="space-y-3">
           {filteredInventory.map((inv) => {
             const isDepleted = inv.quantity === 0
@@ -1109,7 +1273,7 @@ export function InventoryList({
                           size="sm"
                           onClick={() => openPriorityDialog(inv)}
                           className={hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-500'}
-                          title="Set priority"
+                          aria-label={`Set priority for ${inv.items?.name}`}
                         >
                           ⚡
                         </Button>
@@ -1132,6 +1296,7 @@ export function InventoryList({
                             className="h-9 w-9 text-lg font-bold"
                             onClick={() => handleQuantityChange(inv, -1)}
                             disabled={isUpdating}
+                            aria-label={`Decrease quantity of ${inv.items?.name}`}
                           >
                             -
                           </Button>
@@ -1145,6 +1310,7 @@ export function InventoryList({
                             className="h-9 w-9 text-lg font-bold"
                             onClick={() => handleQuantityChange(inv, 1)}
                             disabled={isUpdating}
+                            aria-label={`Increase quantity of ${inv.items?.name}`}
                           >
                             +
                           </Button>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -25,6 +25,23 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface Item {
   id: string
@@ -75,6 +92,56 @@ const typeIcons: Record<string, string> = {
   other: '📦',
 }
 
+// Sortable shelf card wrapper component
+function SortableShelfCard({
+  shelf,
+  headerContent,
+  children,
+}: {
+  shelf: Shelf
+  headerContent: React.ReactNode
+  children: React.ReactNode
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: shelf.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Card className={isDragging ? 'ring-2 ring-amber-500' : ''}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 p-1"
+                {...attributes}
+                {...listeners}
+                aria-label={`Drag to reorder ${shelf.name}`}
+              >
+                ⋮⋮
+              </button>
+              <CardTitle className="text-lg">{shelf.name}</CardTitle>
+            </div>
+            {headerContent}
+          </div>
+        </CardHeader>
+        <CardContent>{children}</CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export function StorageDetail({ storageUnit, householdId, userId, items }: StorageDetailProps) {
   const router = useRouter()
   const [shelfDialogOpen, setShelfDialogOpen] = useState(false)
@@ -84,6 +151,62 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
   const [loading, setLoading] = useState(false)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [shelfName, setShelfName] = useState('')
+
+  // Local state for shelf order (for optimistic updates during drag)
+  const [orderedShelves, setOrderedShelves] = useState(storageUnit.shelves)
+
+  // Keep local state in sync with prop changes
+  useEffect(() => {
+    setOrderedShelves(storageUnit.shelves)
+  }, [storageUnit.shelves])
+
+  // DnD Kit sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  // Handle drag end - update shelf positions
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      const oldIndex = orderedShelves.findIndex((s) => s.id === active.id)
+      const newIndex = orderedShelves.findIndex((s) => s.id === over.id)
+
+      // Optimistically update UI
+      const newOrder = arrayMove(orderedShelves, oldIndex, newIndex)
+      setOrderedShelves(newOrder)
+
+      // Update positions in database
+      const supabase = createClient()
+      const updates = newOrder.map((shelf, index) => ({
+        id: shelf.id,
+        position: index + 1,
+        storage_unit_id: storageUnit.id,
+        name: shelf.name,
+      }))
+
+      const { error } = await supabase
+        .from('shelves')
+        .upsert(updates, { onConflict: 'id' })
+
+      if (error) {
+        toast.error('Failed to reorder shelves')
+        // Revert on error
+        setOrderedShelves(storageUnit.shelves)
+      } else {
+        toast.success('Shelf order updated')
+        router.refresh()
+      }
+    }
+  }
   const [addItemForm, setAddItemForm] = useState({
     itemId: '',
     newItemName: '',
@@ -453,122 +576,134 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {storageUnit.shelves.map((shelf) => (
-            <Card key={shelf.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{shelf.name}</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">
-                      {shelf.inventory.length} items
-                    </Badge>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" aria-label={`Options for ${shelf.name}`}>
-                          ⋮
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditShelfDialog(shelf)}>
-                          Edit Shelf
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-red-600"
-                          onClick={() => handleDeleteShelf(shelf.id)}
-                        >
-                          Delete Shelf
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {shelf.inventory.length === 0 ? (
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-500 italic">No items on this shelf</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openAddItemDialog(shelf.id)}
-                    >
-                      + Add Item
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {shelf.inventory.map((inv) => {
-                      const isDepleted = inv.quantity === 0
-                      const isUpdating = updatingId === inv.id
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={orderedShelves.map((s) => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-4">
+              {orderedShelves.map((shelf) => (
+                <SortableShelfCard
+                  key={shelf.id}
+                  shelf={shelf}
+                  headerContent={
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">
+                        {shelf.inventory.length} items
+                      </Badge>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" aria-label={`Options for ${shelf.name}`}>
+                            ⋮
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditShelfDialog(shelf)}>
+                            Edit Shelf
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-red-600"
+                            onClick={() => handleDeleteShelf(shelf.id)}
+                          >
+                            Delete Shelf
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  }
+                >
+                  {shelf.inventory.length === 0 ? (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-500 italic">No items on this shelf</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openAddItemDialog(shelf.id)}
+                      >
+                        + Add Item
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {shelf.inventory.map((inv) => {
+                        const isDepleted = inv.quantity === 0
+                        const isUpdating = updatingId === inv.id
 
-                      return (
-                        <div
-                          key={inv.id}
-                          className={`flex items-center justify-between p-2 rounded ${isDepleted ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <span className="font-medium">{inv.items?.name}</span>
-                            {inv.items?.category && (
-                              <Badge variant="outline" className="ml-2 text-xs">
-                                {inv.items.category}
-                              </Badge>
-                            )}
-                            {inv.expiration_date && (
-                              <Badge
-                                variant={
-                                  new Date(inv.expiration_date) <= new Date()
-                                    ? 'destructive'
-                                    : 'secondary'
-                                }
-                                className="ml-2"
-                              >
-                                Exp: {new Date(inv.expiration_date).toLocaleDateString()}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleQuantityChange(inv, -1)}
-                              disabled={isUpdating || isDepleted}
-                            >
-                              -
-                            </Button>
-                            <div className="w-14 text-center">
-                              <div className="font-semibold">{inv.quantity}</div>
-                              <div className="text-xs text-gray-500">{inv.unit}</div>
+                        return (
+                          <div
+                            key={inv.id}
+                            className={`flex items-center justify-between p-2 rounded ${isDepleted ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium">{inv.items?.name}</span>
+                              {inv.items?.category && (
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                  {inv.items.category}
+                                </Badge>
+                              )}
+                              {inv.expiration_date && (
+                                <Badge
+                                  variant={
+                                    new Date(inv.expiration_date) <= new Date()
+                                      ? 'destructive'
+                                      : 'secondary'
+                                  }
+                                  className="ml-2"
+                                >
+                                  Exp: {new Date(inv.expiration_date).toLocaleDateString()}
+                                </Badge>
+                              )}
                             </div>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleQuantityChange(inv, 1)}
-                              disabled={isUpdating}
-                            >
-                              +
-                            </Button>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleQuantityChange(inv, -1)}
+                                disabled={isUpdating || isDepleted}
+                                aria-label={`Decrease quantity of ${inv.items?.name}`}
+                              >
+                                -
+                              </Button>
+                              <div className="w-14 text-center">
+                                <div className="font-semibold">{inv.quantity}</div>
+                                <div className="text-xs text-gray-500">{inv.unit}</div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleQuantityChange(inv, 1)}
+                                disabled={isUpdating}
+                                aria-label={`Increase quantity of ${inv.items?.name}`}
+                              >
+                                +
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full mt-2 text-amber-600 hover:bg-amber-50"
-                      onClick={() => openAddItemDialog(shelf.id)}
-                    >
-                      + Add Item to {shelf.name}
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                        )
+                      })}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full mt-2 text-amber-600 hover:bg-amber-50"
+                        onClick={() => openAddItemDialog(shelf.id)}
+                      >
+                        + Add Item to {shelf.name}
+                      </Button>
+                    </div>
+                  )}
+                </SortableShelfCard>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
+
 
       {/* Add Item Dialog */}
       <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>

@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { ActivityFeed } from './activity-feed'
 
 interface ExpiringItem {
   id: string
@@ -590,8 +591,8 @@ export function DashboardOverview({
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* Quick Actions and Activity Feed */}
+      <div className="grid md:grid-cols-3 gap-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -633,6 +634,9 @@ export function DashboardOverview({
             </Link>
           </CardContent>
         </Card>
+
+        {/* Activity Feed */}
+        {householdId && <ActivityFeed householdId={householdId} limit={5} />}
       </div>
 
       {/* Depleted Items / Shopping List */}
