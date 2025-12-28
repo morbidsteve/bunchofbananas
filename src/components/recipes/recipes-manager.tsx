@@ -25,6 +25,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { celebrateRecipe } from '@/lib/confetti'
 import {
   type UserRecipeWithIngredients,
   type ParsedIngredient,
@@ -211,6 +212,9 @@ export function RecipesManager({
       }
 
       toast.success(editingRecipe ? 'Recipe updated!' : 'Recipe created!')
+      if (!editingRecipe) {
+        celebrateRecipe()
+      }
       setDialogOpen(false)
       resetForm()
       router.refresh()

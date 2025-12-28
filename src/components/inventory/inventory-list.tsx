@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { celebrateSmall } from '@/lib/confetti'
 
 // Lazy load the barcode scanner to avoid SSR issues
 const BarcodeScanner = lazy(() =>
@@ -311,6 +312,7 @@ export function InventoryList({
 
       const itemName = isNewItem ? formData.newItemName : items.find(i => i.id === itemId)?.name
       toast.success(`Added ${itemName} to inventory`)
+      celebrateSmall()
 
       if (addAnother) {
         // Reset only item-specific fields, keep shelf and store for convenience

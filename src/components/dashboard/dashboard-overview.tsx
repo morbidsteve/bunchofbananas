@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { ActivityFeed } from './activity-feed'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { celebrateSmall } from '@/lib/confetti'
 
 interface ExpiringItem {
   id: string
@@ -235,6 +236,7 @@ export function DashboardOverview({
     if (!error) {
       const itemName = isNewItem ? formData.newItemName : items.find(i => i.id === itemId)?.name
       toast.success(`Added ${itemName} to inventory`)
+      celebrateSmall()
       setAddDialogOpen(false)
       setFormData({
         itemId: '',
