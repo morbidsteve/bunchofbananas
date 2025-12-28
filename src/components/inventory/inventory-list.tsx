@@ -118,6 +118,18 @@ export function InventoryList({
     conditionNotes: '',
   })
 
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null)
+  const [editForm, setEditForm] = useState({
+    itemName: '',
+    itemCategory: '',
+    quantity: '',
+    unit: '',
+    shelfId: '',
+    expirationDate: '',
+  })
+
   const [formData, setFormData] = useState({
     itemId: '',
     newItemName: '',
@@ -418,6 +430,70 @@ export function InventoryList({
 
     toast.success(`${inv.items.name} restocked`)
     setUpdatingId(null)
+    router.refresh()
+  }
+
+  function openEditDialog(inv: InventoryItem) {
+    setEditingInventory(inv)
+    setEditForm({
+      itemName: inv.items?.name || '',
+      itemCategory: inv.items?.category || '',
+      quantity: inv.quantity.toString(),
+      unit: inv.unit,
+      shelfId: inv.shelves?.id || '',
+      expirationDate: inv.expiration_date || '',
+    })
+    setEditDialogOpen(true)
+  }
+
+  async function handleEditInventory(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingInventory || !editingInventory.items) return
+
+    setLoading(true)
+    const supabase = createClient()
+
+    // Update item name and category if changed
+    if (
+      editForm.itemName !== editingInventory.items.name ||
+      editForm.itemCategory !== (editingInventory.items.category || '')
+    ) {
+      const { error: itemError } = await supabase
+        .from('items')
+        .update({
+          name: editForm.itemName,
+          category: editForm.itemCategory || null,
+        })
+        .eq('id', editingInventory.items.id)
+
+      if (itemError) {
+        toast.error('Failed to update item')
+        setLoading(false)
+        return
+      }
+    }
+
+    // Update inventory record
+    const { error: invError } = await supabase
+      .from('inventory')
+      .update({
+        quantity: parseFloat(editForm.quantity),
+        unit: editForm.unit,
+        shelf_id: editForm.shelfId,
+        expiration_date: editForm.expirationDate || null,
+      })
+      .eq('id', editingInventory.id)
+
+    if (invError) {
+      toast.error('Failed to update inventory')
+      setLoading(false)
+      return
+    }
+
+    toast.success(`${editForm.itemName} updated`)
+    setEditDialogOpen(false)
+    setEditingInventory(null)
+    setLoading(false)
     router.refresh()
   }
 
@@ -882,7 +958,15 @@ export function InventoryList({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-red-600 hover:bg-red-50 ml-2"
+                        className="text-gray-600 hover:bg-gray-100"
+                        onClick={() => openEditDialog(inv)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:bg-red-50"
                         onClick={() => handleRemoveItem(inv.id)}
                       >
                         Remove
@@ -943,6 +1027,131 @@ export function InventoryList({
                 disabled={loading}
               >
                 {loading ? 'Saving...' : 'Save Priority'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Inventory Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Inventory Item</DialogTitle>
+            <DialogDescription>
+              Update item details, quantity, or location
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditInventory} className="space-y-4">
+            {/* Item Name */}
+            <div className="space-y-2">
+              <Label htmlFor="editItemName">Item Name</Label>
+              <Input
+                id="editItemName"
+                value={editForm.itemName}
+                onChange={(e) => setEditForm({ ...editForm, itemName: e.target.value })}
+                required
+              />
+            </div>
+
+            {/* Category */}
+            <div className="space-y-2">
+              <Label htmlFor="editCategory">Category (optional)</Label>
+              <Input
+                id="editCategory"
+                value={editForm.itemCategory}
+                onChange={(e) => setEditForm({ ...editForm, itemCategory: e.target.value })}
+                placeholder="Dairy, Produce, etc."
+              />
+            </div>
+
+            {/* Quantity and Unit */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editQuantity">Quantity</Label>
+                <Input
+                  id="editQuantity"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={editForm.quantity}
+                  onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editUnit">Unit</Label>
+                <Select
+                  value={editForm.unit}
+                  onValueChange={(value) => setEditForm({ ...editForm, unit: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="count">count</SelectItem>
+                    <SelectItem value="lb">lb</SelectItem>
+                    <SelectItem value="oz">oz</SelectItem>
+                    <SelectItem value="gallon">gallon</SelectItem>
+                    <SelectItem value="liter">liter</SelectItem>
+                    <SelectItem value="pack">pack</SelectItem>
+                    <SelectItem value="bag">bag</SelectItem>
+                    <SelectItem value="box">box</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="space-y-2">
+              <Label>Location</Label>
+              <Select
+                value={editForm.shelfId}
+                onValueChange={(value) => setEditForm({ ...editForm, shelfId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose shelf" />
+                </SelectTrigger>
+                <SelectContent>
+                  {storageUnits.map((unit) => (
+                    <div key={unit.id}>
+                      <div className="px-2 py-1 text-sm font-semibold text-gray-500">
+                        {typeIcons[unit.type]} {unit.name}
+                      </div>
+                      {unit.shelves
+                        .sort((a, b) => a.position - b.position)
+                        .map((shelf) => (
+                          <SelectItem key={shelf.id} value={shelf.id}>
+                            └ {shelf.name}
+                          </SelectItem>
+                        ))}
+                    </div>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Expiration Date */}
+            <div className="space-y-2">
+              <Label htmlFor="editExpiration">Expiration Date (optional)</Label>
+              <Input
+                id="editExpiration"
+                type="date"
+                value={editForm.expirationDate}
+                onChange={(e) => setEditForm({ ...editForm, expirationDate: e.target.value })}
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-amber-500 hover:bg-amber-600"
+                disabled={loading || !editForm.itemName || !editForm.shelfId}
+              >
+                {loading ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </form>

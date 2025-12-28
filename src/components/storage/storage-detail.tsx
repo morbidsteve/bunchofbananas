@@ -94,6 +94,19 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
   })
   const [isNewItem, setIsNewItem] = useState(false)
 
+  // Edit storage unit state
+  const [editStorageDialogOpen, setEditStorageDialogOpen] = useState(false)
+  const [editStorageForm, setEditStorageForm] = useState({
+    name: storageUnit.name,
+    type: storageUnit.type,
+    location: storageUnit.location || '',
+  })
+
+  // Edit shelf state
+  const [editShelfDialogOpen, setEditShelfDialogOpen] = useState(false)
+  const [editingShelf, setEditingShelf] = useState<Shelf | null>(null)
+  const [editShelfName, setEditShelfName] = useState('')
+
   async function handleAddShelf(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -144,6 +157,62 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
     if (!error) {
       router.refresh()
     }
+  }
+
+  async function handleEditStorage(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('storage_units')
+      .update({
+        name: editStorageForm.name,
+        type: editStorageForm.type,
+        location: editStorageForm.location || null,
+      })
+      .eq('id', storageUnit.id)
+
+    if (error) {
+      toast.error('Failed to update storage unit')
+    } else {
+      toast.success('Storage unit updated')
+      setEditStorageDialogOpen(false)
+      router.refresh()
+    }
+
+    setLoading(false)
+  }
+
+  function openEditShelfDialog(shelf: Shelf) {
+    setEditingShelf(shelf)
+    setEditShelfName(shelf.name)
+    setEditShelfDialogOpen(true)
+  }
+
+  async function handleEditShelf(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingShelf) return
+
+    setLoading(true)
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('shelves')
+      .update({ name: editShelfName })
+      .eq('id', editingShelf.id)
+
+    if (error) {
+      toast.error('Failed to update shelf')
+    } else {
+      toast.success('Shelf updated')
+      setEditShelfDialogOpen(false)
+      setEditingShelf(null)
+      router.refresh()
+    }
+
+    setLoading(false)
   }
 
   async function handleQuantityChange(inv: InventoryItem, delta: number) {
@@ -278,6 +347,9 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setEditStorageDialogOpen(true)}>
+            Edit
+          </Button>
           <Dialog open={shelfDialogOpen} onOpenChange={setShelfDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-amber-500 hover:bg-amber-600">
@@ -398,6 +470,9 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEditShelfDialog(shelf)}>
+                          Edit Shelf
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-red-600"
                           onClick={() => handleDeleteShelf(shelf.id)}
@@ -632,6 +707,95 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
                 disabled={loading || (!isNewItem && !addItemForm.itemId)}
               >
                 {loading ? 'Adding...' : 'Add to Shelf'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Storage Unit Dialog */}
+      <Dialog open={editStorageDialogOpen} onOpenChange={setEditStorageDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Storage Unit</DialogTitle>
+            <DialogDescription>
+              Update the name, type, or location
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditStorage} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editName">Name</Label>
+              <Input
+                id="editName"
+                value={editStorageForm.name}
+                onChange={(e) => setEditStorageForm({ ...editStorageForm, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editType">Type</Label>
+              <Select
+                value={editStorageForm.type}
+                onValueChange={(value) => setEditStorageForm({ ...editStorageForm, type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fridge">Refrigerator</SelectItem>
+                  <SelectItem value="freezer">Freezer</SelectItem>
+                  <SelectItem value="pantry">Pantry</SelectItem>
+                  <SelectItem value="cabinet">Cabinet</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editLocation">Location (optional)</Label>
+              <Input
+                id="editLocation"
+                value={editStorageForm.location}
+                onChange={(e) => setEditStorageForm({ ...editStorageForm, location: e.target.value })}
+                placeholder="Kitchen, Garage, etc."
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setEditStorageDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-amber-500 hover:bg-amber-600" disabled={loading}>
+                {loading ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Shelf Dialog */}
+      <Dialog open={editShelfDialogOpen} onOpenChange={setEditShelfDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Shelf</DialogTitle>
+            <DialogDescription>
+              Update the shelf name
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditShelf} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editShelfName">Shelf Name</Label>
+              <Input
+                id="editShelfName"
+                value={editShelfName}
+                onChange={(e) => setEditShelfName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setEditShelfDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-amber-500 hover:bg-amber-600" disabled={loading}>
+                {loading ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </form>

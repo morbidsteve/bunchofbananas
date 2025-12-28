@@ -39,37 +39,134 @@ interface Recipe {
   shareToken?: string
 }
 
-// Normalize ingredient name for matching (remove adjectives, quantities, etc.)
-function normalizeIngredient(name: string): string[] {
-  const lower = name.toLowerCase()
-  // Remove common adjectives and descriptors
-  const cleaned = lower
-    .replace(/\b(large|small|medium|fresh|dried|chopped|minced|diced|sliced|whole|ground|crushed|organic|raw|cooked|frozen|canned|ripe|unripe)\b/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+// Words to remove when normalizing ingredients
+const DESCRIPTORS = [
+  'large', 'small', 'medium', 'big', 'tiny', 'thin', 'thick',
+  'chopped', 'minced', 'diced', 'sliced', 'cubed', 'julienned', 'shredded',
+  'grated', 'crushed', 'mashed', 'pureed', 'ground', 'whole', 'halved',
+  'quartered', 'cut', 'torn', 'crumbled', 'flaked',
+  'fresh', 'dried', 'frozen', 'canned', 'raw', 'cooked', 'roasted', 'grilled',
+  'baked', 'fried', 'steamed', 'boiled', 'blanched', 'sauteed', 'braised',
+  'pickled', 'marinated', 'smoked', 'cured',
+  'organic', 'ripe', 'unripe', 'young', 'mature', 'aged',
+  'red', 'green', 'yellow', 'orange', 'white', 'black', 'brown', 'purple',
+  'golden', 'dark', 'light',
+  'hot', 'cold', 'warm', 'chilled',
+  'soft', 'hard', 'crispy', 'crunchy', 'tender', 'firm',
+  'boneless', 'skinless', 'seedless', 'pitted', 'peeled', 'trimmed',
+  'finely', 'roughly', 'coarsely', 'freshly', 'lightly',
+]
 
-  // Split into individual words for partial matching
-  const words = cleaned.split(' ').filter(w => w.length > 2)
-
-  // Return both the cleaned name and individual significant words
-  return [cleaned, ...words]
+// Ingredient synonyms - map variants to base ingredient
+const SYNONYMS: Record<string, string> = {
+  'peppers': 'pepper', 'bell pepper': 'pepper', 'bell peppers': 'pepper',
+  'capsicum': 'pepper', 'sweet pepper': 'pepper', 'sweet peppers': 'pepper',
+  'onions': 'onion', 'shallot': 'onion', 'shallots': 'onion',
+  'scallion': 'onion', 'scallions': 'onion', 'green onion': 'onion',
+  'tomatoes': 'tomato', 'cherry tomato': 'tomato', 'roma tomato': 'tomato',
+  'potatoes': 'potato', 'spud': 'potato', 'spuds': 'potato',
+  'carrots': 'carrot',
+  'garlic clove': 'garlic', 'garlic cloves': 'garlic',
+  'chicken breast': 'chicken', 'chicken thigh': 'chicken',
+  'ground beef': 'beef', 'beef steak': 'beef', 'steak': 'beef',
+  'mushrooms': 'mushroom', 'cremini': 'mushroom', 'portobello': 'mushroom',
+  'eggs': 'egg', 'whole egg': 'egg',
+  'lemons': 'lemon', 'lemon juice': 'lemon',
+  'limes': 'lime', 'lime juice': 'lime',
+  'cilantro': 'coriander', 'coriander leaves': 'coriander',
+  'broth': 'stock', 'chicken stock': 'stock', 'beef stock': 'stock',
+  'chicken broth': 'stock', 'vegetable stock': 'stock',
 }
 
-// Check if user has an ingredient (flexible matching)
+// Normalize ingredient name for matching
+function normalizeIngredient(name: string): string[] {
+  const lower = name.toLowerCase()
+  const descriptorPattern = new RegExp(`\\b(${DESCRIPTORS.join('|')})\\b`, 'g')
+  const cleaned = lower.replace(descriptorPattern, '').replace(/\\s+/g, ' ').trim()
+
+  const words = cleaned.split(' ').filter(w => w.length > 2)
+  const baseIngredient = SYNONYMS[cleaned]
+  const wordBases = words.map(w => SYNONYMS[w]).filter(Boolean) as string[]
+
+  const results = [cleaned, ...words]
+  if (baseIngredient) results.push(baseIngredient)
+  results.push(...wordBases)
+
+  return [...new Set(results)]
+}
+
+// Get core ingredient (main noun)
+function getCoreIngredient(name: string): string {
+  const lower = name.toLowerCase()
+  const descriptorPattern = new RegExp(`\\b(${DESCRIPTORS.join('|')})\\b`, 'g')
+  const cleaned = lower.replace(descriptorPattern, '').replace(/\s+/g, ' ').trim()
+  const words = cleaned.split(' ')
+  const lastWord = words[words.length - 1]
+  return SYNONYMS[lastWord] || SYNONYMS[cleaned] || lastWord
+}
+
+// Levenshtein distance for fuzzy matching (handles typos)
+function levenshteinDistance(a: string, b: string): number {
+  const matrix: number[][] = []
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i]
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1]
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        )
+      }
+    }
+  }
+  return matrix[b.length][a.length]
+}
+
+// Check if two strings are similar (fuzzy match)
+function isSimilar(a: string, b: string, threshold = 0.8): boolean {
+  if (a === b) return true
+  const maxLen = Math.max(a.length, b.length)
+  if (maxLen === 0) return true
+  const distance = levenshteinDistance(a, b)
+  const similarity = 1 - distance / maxLen
+  return similarity >= threshold
+}
+
+// Check if user has an ingredient (flexible matching with fuzzy support)
 function hasIngredient(recipeIngredient: string, userIngredients: string[]): boolean {
   const recipeTerms = normalizeIngredient(recipeIngredient)
+  const recipeCore = getCoreIngredient(recipeIngredient)
 
   for (const userIng of userIngredients) {
     const userTerms = normalizeIngredient(userIng)
+    const userCore = getCoreIngredient(userIng)
+
+    // Check core ingredient match (with fuzzy matching for typos)
+    if (recipeCore.length > 2 && userCore.length > 2) {
+      if (recipeCore === userCore || isSimilar(recipeCore, userCore)) {
+        return true
+      }
+    }
 
     // Check if any terms match
     for (const recipeTerm of recipeTerms) {
       for (const userTerm of userTerms) {
-        // Exact match or one contains the other
-        if (recipeTerm === userTerm ||
-            recipeTerm.includes(userTerm) ||
-            userTerm.includes(recipeTerm)) {
-          return true
+        // Exact match
+        if (recipeTerm === userTerm) return true
+        // Fuzzy match for longer terms
+        if (recipeTerm.length >= 4 && userTerm.length >= 4) {
+          if (isSimilar(recipeTerm, userTerm)) return true
+          if (recipeTerm.includes(userTerm) || userTerm.includes(recipeTerm)) {
+            return true
+          }
         }
       }
     }
