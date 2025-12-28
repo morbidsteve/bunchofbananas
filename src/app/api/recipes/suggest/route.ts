@@ -382,7 +382,7 @@ export async function POST(request: NextRequest) {
     // Check authentication - allow public access for TheMealDB recipes
     const { data: { user } } = await supabase.auth.getUser()
 
-    const { ingredients, householdId, shareToken, page = 0, limit = 8 } = await request.json()
+    const { ingredients, householdId, shareToken, page = 0, limit = 8, mealType = null } = await request.json()
 
     // Validate input
     if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
@@ -391,6 +391,9 @@ export async function POST(request: NextRequest) {
 
     // Limit ingredients to prevent abuse (max 200 ingredients)
     const validIngredients = ingredients.slice(0, 200).map(i => String(i).slice(0, 100))
+
+    // Parse meal type filter (can be single or comma-separated like "Beef,Chicken,Pork")
+    const mealTypeCategories = mealType ? String(mealType).split(',').map(t => t.trim().toLowerCase()) : []
 
     // For household access, verify either:
     // 1. User is authenticated and member of household
@@ -462,6 +465,14 @@ export async function POST(request: NextRequest) {
               const category = recipe.category || ''
               const area = recipe.cuisine || ''
 
+              // Filter by meal type if specified
+              if (mealTypeCategories.length > 0) {
+                const recipeCategory = category.toLowerCase()
+                if (!mealTypeCategories.some(mt => recipeCategory.includes(mt) || mt.includes(recipeCategory))) {
+                  continue // Skip this recipe if it doesn't match the meal type filter
+                }
+              }
+
               recipes.push({
                 id: `user-${recipe.id}`,
                 title: recipe.title,
@@ -510,6 +521,14 @@ export async function POST(request: NextRequest) {
 
         const category = mealDetail.strCategory || ''
         const area = mealDetail.strArea || ''
+
+        // Filter by meal type if specified
+        if (mealTypeCategories.length > 0) {
+          const recipeCategory = category.toLowerCase()
+          if (!mealTypeCategories.some(mt => recipeCategory.includes(mt) || mt.includes(recipeCategory))) {
+            return // Skip this recipe if it doesn't match the meal type filter
+          }
+        }
 
         recipes.push({
           id: mealDetail.idMeal,
@@ -564,9 +583,20 @@ export async function POST(request: NextRequest) {
       if (recipes.length >= 30) break
     }
 
-    // Browse by random categories for more variety
-    const shuffledCategories = shuffleArray(MEAL_CATEGORIES)
-    const categoriesToBrowse = shuffledCategories.slice(0, 3)
+    // Browse by categories - prioritize filtered categories if specified
+    let categoriesToBrowse: string[]
+    if (mealTypeCategories.length > 0) {
+      // When filtering, browse the specific categories the user wants
+      categoriesToBrowse = MEAL_CATEGORIES.filter(cat =>
+        mealTypeCategories.some(mt => cat.toLowerCase().includes(mt) || mt.includes(cat.toLowerCase()))
+      )
+      // Shuffle the filtered categories for variety within the filter
+      categoriesToBrowse = shuffleArray(categoriesToBrowse)
+    } else {
+      // No filter - use random categories for variety
+      const shuffledCategories = shuffleArray(MEAL_CATEGORIES)
+      categoriesToBrowse = shuffledCategories.slice(0, 3)
+    }
 
     for (const category of categoriesToBrowse) {
       if (recipes.length >= 40) break

@@ -175,6 +175,18 @@ export function DashboardOverview({
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [showItemSelector, setShowItemSelector] = useState(false)
+  const [mealTypeFilter, setMealTypeFilter] = useState<string | null>(null)
+
+  // Meal type options for filtering
+  const mealTypes = [
+    { value: 'Breakfast', label: 'Breakfast' },
+    { value: 'Starter', label: 'Appetizer' },
+    { value: 'Side', label: 'Side' },
+    { value: 'Beef,Chicken,Pork,Lamb,Seafood,Goat', label: 'Main Course' },
+    { value: 'Vegetarian,Vegan', label: 'Vegetarian' },
+    { value: 'Pasta', label: 'Pasta' },
+    { value: 'Dessert', label: 'Dessert' },
+  ]
 
   // Add Item dialog state
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -330,7 +342,7 @@ export function DashboardOverview({
       const response = await fetch('/api/recipes/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients, householdId, page, limit: 8 }),
+        body: JSON.stringify({ ingredients, householdId, page, limit: 8, mealType: mealTypeFilter }),
       })
 
       if (!response.ok) throw new Error('Failed to fetch recipes')
@@ -896,6 +908,29 @@ export function DashboardOverview({
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Meal Type Filter */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={mealTypeFilter === null ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setMealTypeFilter(null)}
+                className="rounded-full"
+              >
+                All Types
+              </Button>
+              {mealTypes.map((type) => (
+                <Button
+                  key={type.value}
+                  variant={mealTypeFilter === type.value ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => setMealTypeFilter(type.value)}
+                  className="rounded-full"
+                >
+                  {type.label}
+                </Button>
+              ))}
+            </div>
+
             {/* Item Selector */}
             {showItemSelector && (
               <div className="border rounded-lg p-4 bg-gray-50">

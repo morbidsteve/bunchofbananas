@@ -135,6 +135,11 @@ export function InventoryList({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null)
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null)
@@ -373,6 +378,49 @@ export function InventoryList({
     toast.success(`Removed ${deletingItem.items?.name || 'item'} from inventory`)
     setDeleteDialogOpen(false)
     setDeletingItem(null)
+    router.refresh()
+  }
+
+  // Bulk selection functions
+  function toggleItemSelection(id: string) {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredInventory.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredInventory.map(inv => inv.id)))
+    }
+  }
+
+  async function confirmBulkDelete() {
+    if (selectedIds.size === 0) return
+    setBulkDeleting(true)
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('inventory')
+      .delete()
+      .in('id', Array.from(selectedIds))
+
+    if (error) {
+      toast.error('Failed to delete some items')
+    } else {
+      toast.success(`Removed ${selectedIds.size} items from inventory`)
+    }
+
+    setSelectedIds(new Set())
+    setBulkDeleteDialogOpen(false)
+    setBulkDeleting(false)
     router.refresh()
   }
 
@@ -1069,6 +1117,36 @@ export function InventoryList({
         </div>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {filteredInventory.length > 0 && (
+        <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selectedIds.size === filteredInventory.length && filteredInventory.length > 0}
+              onChange={toggleSelectAll}
+              className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            <span className="text-sm text-gray-600">
+              {selectedIds.size === 0
+                ? 'Select all'
+                : selectedIds.size === filteredInventory.length
+                  ? 'Deselect all'
+                  : `${selectedIds.size} selected`}
+            </span>
+          </label>
+          {selectedIds.size > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteDialogOpen(true)}
+            >
+              Delete {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''}
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* No storage warning */}
       {!hasStorageUnits && (
         <Card className="bg-amber-50 border-amber-200">
@@ -1140,7 +1218,14 @@ export function InventoryList({
                     <CardContent className="py-4">
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <div className="text-2xl flex-shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(inv.id)}
+                            onChange={() => toggleItemSelection(inv.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
+                            aria-label={`Select ${inv.items?.name}`}
+                          />
+                          <div className="text-2xl flex-shrink-0" aria-hidden="true">
                             {typeIcons[inv.shelves?.storage_units?.type || 'other']}
                           </div>
                           <div className="min-w-0">
@@ -1299,7 +1384,14 @@ export function InventoryList({
                 <CardContent className="py-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className="text-2xl flex-shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(inv.id)}
+                        onChange={() => toggleItemSelection(inv.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
+                        aria-label={`Select ${inv.items?.name}`}
+                      />
+                      <div className="text-2xl flex-shrink-0" aria-hidden="true">
                         {typeIcons[inv.shelves?.storage_units?.type || 'other']}
                       </div>
                       <div className="min-w-0">
@@ -1456,6 +1548,29 @@ export function InventoryList({
               className="bg-red-600 hover:bg-red-700"
             >
               Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {selectedIds.size} Items</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove {selectedIds.size} item{selectedIds.size > 1 ? 's' : ''} from your inventory?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBulkDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkDelete}
+              disabled={bulkDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {bulkDeleting ? 'Removing...' : `Remove ${selectedIds.size} Items`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
