@@ -166,6 +166,11 @@ function hasIngredient(recipeIngredient: string, userIngredients: string[]): boo
   const recipeTerms = normalizeIngredient(recipeIngredient)
   const recipeCore = getCoreIngredient(recipeIngredient)
 
+  console.log(`[MATCH DEBUG] Recipe ingredient: "${recipeIngredient}"`)
+  console.log(`[MATCH DEBUG]   Normalized terms: ${JSON.stringify(recipeTerms)}`)
+  console.log(`[MATCH DEBUG]   Core: "${recipeCore}"`)
+  console.log(`[MATCH DEBUG]   User ingredients: ${JSON.stringify(userIngredients.slice(0, 5))}...`)
+
   for (const userIng of userIngredients) {
     const userTerms = normalizeIngredient(userIng)
     const userCore = getCoreIngredient(userIng)
@@ -173,6 +178,7 @@ function hasIngredient(recipeIngredient: string, userIngredients: string[]): boo
     // Check core ingredient match (with fuzzy matching for typos)
     if (recipeCore.length > 2 && userCore.length > 2) {
       if (recipeCore === userCore || isSimilar(recipeCore, userCore)) {
+        console.log(`[MATCH DEBUG]   ✓ MATCHED via core: "${recipeCore}" == "${userCore}"`)
         return true
       }
     }
@@ -181,11 +187,18 @@ function hasIngredient(recipeIngredient: string, userIngredients: string[]): boo
     for (const recipeTerm of recipeTerms) {
       for (const userTerm of userTerms) {
         // Exact match
-        if (recipeTerm === userTerm) return true
+        if (recipeTerm === userTerm) {
+          console.log(`[MATCH DEBUG]   ✓ MATCHED via exact term: "${recipeTerm}"`)
+          return true
+        }
         // Fuzzy match for longer terms
         if (recipeTerm.length >= 4 && userTerm.length >= 4) {
-          if (isSimilar(recipeTerm, userTerm)) return true
+          if (isSimilar(recipeTerm, userTerm)) {
+            console.log(`[MATCH DEBUG]   ✓ MATCHED via fuzzy: "${recipeTerm}" ~ "${userTerm}"`)
+            return true
+          }
           if (recipeTerm.includes(userTerm) || userTerm.includes(recipeTerm)) {
+            console.log(`[MATCH DEBUG]   ✓ MATCHED via substring: "${recipeTerm}" <-> "${userTerm}"`)
             return true
           }
         }
@@ -193,6 +206,7 @@ function hasIngredient(recipeIngredient: string, userIngredients: string[]): boo
     }
   }
 
+  console.log(`[MATCH DEBUG]   ✗ NO MATCH FOUND`)
   return false
 }
 
