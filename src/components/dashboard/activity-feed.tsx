@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface ActivityItem {
@@ -60,30 +61,32 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function fetchActivities() {
-      const supabase = createClient()
+  async function fetchActivities() {
+    setLoading(true)
+    setError(null)
+    const supabase = createClient()
 
-      const { data, error } = await supabase
-        .from('activity_log')
-        .select('*')
-        .eq('household_id', householdId)
-        .order('created_at', { ascending: false })
-        .limit(limit)
+    const { data, error: fetchError } = await supabase
+      .from('activity_log')
+      .select('*')
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
 
-      if (error) {
-        // Table might not exist yet - silently handle
-        if (error.code === '42P01') {
-          setActivities([])
-        } else {
-          setError('Failed to load activity')
-        }
+    if (fetchError) {
+      // Table might not exist yet - silently handle
+      if (fetchError.code === '42P01') {
+        setActivities([])
       } else {
-        setActivities(data || [])
+        setError('Failed to load activity')
       }
-      setLoading(false)
+    } else {
+      setActivities(data || [])
     }
+    setLoading(false)
+  }
 
+  useEffect(() => {
     fetchActivities()
 
     // Set up real-time subscription
@@ -107,6 +110,7 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
     return () => {
       supabase.removeChannel(channel)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdId, limit])
 
   if (loading) {
@@ -143,7 +147,16 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-500">{error}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-red-600">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchActivities()}
+            >
+              Retry
+            </Button>
+          </div>
         </CardContent>
       </Card>
     )

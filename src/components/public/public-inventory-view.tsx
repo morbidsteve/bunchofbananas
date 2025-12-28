@@ -579,7 +579,17 @@ export function PublicInventoryView({
             </CardHeader>
             <CardContent>
               {recipeError && (
-                <p role="alert" className="text-red-700 text-sm mb-4">{recipeError}</p>
+                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg mb-4">
+                  <p role="alert" className="text-red-700 text-sm">{recipeError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => searchRecipes()}
+                    className="text-red-700 border-red-300 hover:bg-red-100"
+                  >
+                    Retry
+                  </Button>
+                </div>
               )}
 
               {recipes.length === 0 && !loadingRecipes && !recipeError && (
