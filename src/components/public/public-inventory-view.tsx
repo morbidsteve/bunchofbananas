@@ -244,9 +244,12 @@ export function PublicInventoryView({
         body: JSON.stringify({ ingredients, page, limit: 8 }),
       })
 
-      if (!response.ok) throw new Error('Failed to fetch recipes')
-
       const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.details || data.error || 'Failed to fetch recipes')
+      }
+
       if (append) {
         setRecipes(prev => [...prev, ...(data.recipes || [])])
       } else {
@@ -254,8 +257,9 @@ export function PublicInventoryView({
       }
       setHasMore(data.hasMore || false)
       setCurrentPage(page)
-    } catch {
-      setRecipeError('Could not load recipe suggestions')
+    } catch (error) {
+      console.error('Recipe search error:', error)
+      setRecipeError(error instanceof Error ? error.message : 'Could not load recipe suggestions')
     } finally {
       setLoadingRecipes(false)
       setLoadingMore(false)

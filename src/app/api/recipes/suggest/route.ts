@@ -429,9 +429,10 @@ export async function POST(request: NextRequest) {
       hasMore,
       total: recipes.length,
     })
-  } catch {
+  } catch (error) {
+    console.error('Recipe suggest API error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch recipes' },
+      { error: 'Failed to fetch recipes', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }
