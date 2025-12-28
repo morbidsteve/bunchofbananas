@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Failed to send invite email:', error)
       return NextResponse.json(
-        { error: 'Failed to send email', details: error.message },
+        { error: 'Failed to send email. Please try again later.' },
         { status: 500 }
       )
     }

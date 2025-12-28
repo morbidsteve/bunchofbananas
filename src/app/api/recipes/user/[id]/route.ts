@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { normalizeIngredientName } from '@/types/recipes'
 
+// Input validation constants (same as POST route)
+const MAX_TITLE_LENGTH = 200
+const MAX_DESCRIPTION_LENGTH = 2000
+const MAX_INSTRUCTIONS_LENGTH = 50000
+const MAX_CATEGORY_LENGTH = 100
+const MAX_CUISINE_LENGTH = 100
+const MAX_INGREDIENTS = 100
+const MAX_INGREDIENT_NAME_LENGTH = 200
+
+function truncate(str: string | null | undefined, maxLength: number): string | null {
+  if (!str) return null
+  return str.slice(0, maxLength)
+}
+
 interface RouteParams {
   params: Promise<{ id: string }>
 }
@@ -100,15 +114,45 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     isPublic,
   } = body
 
-  // Update recipe
+  // Validate required fields
+  if (!title || !instructions) {
+    return NextResponse.json(
+      { error: 'Title and instructions are required' },
+      { status: 400 }
+    )
+  }
+
+  // Validate input types and lengths
+  if (typeof title !== 'string' || title.length > MAX_TITLE_LENGTH) {
+    return NextResponse.json(
+      { error: `Title must be ${MAX_TITLE_LENGTH} characters or less` },
+      { status: 400 }
+    )
+  }
+
+  if (typeof instructions !== 'string' || instructions.length > MAX_INSTRUCTIONS_LENGTH) {
+    return NextResponse.json(
+      { error: `Instructions must be ${MAX_INSTRUCTIONS_LENGTH} characters or less` },
+      { status: 400 }
+    )
+  }
+
+  if (ingredients && (!Array.isArray(ingredients) || ingredients.length > MAX_INGREDIENTS)) {
+    return NextResponse.json(
+      { error: `Maximum ${MAX_INGREDIENTS} ingredients allowed` },
+      { status: 400 }
+    )
+  }
+
+  // Update recipe with sanitized inputs
   const { error: updateError } = await supabase
     .from('user_recipes')
     .update({
-      title,
-      description: description || null,
-      instructions,
-      category: category || null,
-      cuisine: cuisine || null,
+      title: title.slice(0, MAX_TITLE_LENGTH),
+      description: truncate(description, MAX_DESCRIPTION_LENGTH),
+      instructions: instructions.slice(0, MAX_INSTRUCTIONS_LENGTH),
+      category: truncate(category, MAX_CATEGORY_LENGTH),
+      cuisine: truncate(cuisine, MAX_CUISINE_LENGTH),
       prep_time_minutes: prepTime ? parseInt(prepTime) : null,
       cook_time_minutes: cookTime ? parseInt(cookTime) : null,
       servings: servings ? parseInt(servings) : null,
@@ -127,9 +171,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Delete existing ingredients
     await supabase.from('recipe_ingredients').delete().eq('recipe_id', id)
 
-    // Insert new ingredients
+    // Insert new ingredients with sanitized data
     if (ingredients.length > 0) {
-      const ingredientRows = ingredients.map(
+      const ingredientRows = ingredients.slice(0, MAX_INGREDIENTS).map(
         (
           ing: {
             name: string
@@ -138,15 +182,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             notes?: string
           },
           idx: number
-        ) => ({
-          recipe_id: id,
-          name: ing.name,
-          quantity: ing.quantity || null,
-          unit: ing.unit || null,
-          notes: ing.notes || null,
-          position: idx,
-          normalized_name: normalizeIngredientName(ing.name),
-        })
+        ) => {
+          const name = String(ing.name || '').slice(0, MAX_INGREDIENT_NAME_LENGTH)
+          return {
+            recipe_id: id,
+            name,
+            quantity: ing.quantity ? String(ing.quantity).slice(0, 50) : null,
+            unit: ing.unit ? String(ing.unit).slice(0, 50) : null,
+            notes: ing.notes ? String(ing.notes).slice(0, 500) : null,
+            position: idx,
+            normalized_name: normalizeIngredientName(name),
+          }
+        }
       )
 
       await supabase.from('recipe_ingredients').insert(ingredientRows)

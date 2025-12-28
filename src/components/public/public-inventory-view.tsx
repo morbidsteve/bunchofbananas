@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface InventoryItem {
   id: string
@@ -74,6 +75,8 @@ interface Recipe {
 
 interface PublicInventoryViewProps {
   householdName: string
+  householdId: string
+  shareToken: string
   inventory: InventoryItem[]
   storageUnits: StorageUnit[]
 }
@@ -88,6 +91,8 @@ const typeIcons: Record<string, string> = {
 
 export function PublicInventoryView({
   householdName,
+  householdId,
+  shareToken,
   inventory,
   storageUnits,
 }: PublicInventoryViewProps) {
@@ -241,7 +246,7 @@ export function PublicInventoryView({
       const response = await fetch('/api/recipes/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients, page, limit: 8 }),
+        body: JSON.stringify({ ingredients, householdId, shareToken, page, limit: 8 }),
       })
 
       const data = await response.json()
@@ -558,13 +563,18 @@ export function PublicInventoryView({
                     Find recipes based on {householdName}&apos;s inventory ({allItemNames.length} items available)
                   </CardDescription>
                 </div>
-                <Button
-                  onClick={() => searchRecipes()}
-                  disabled={loadingRecipes || allItemNames.length === 0}
-                  className="bg-amber-500 hover:bg-amber-600"
-                >
-                  {loadingRecipes ? 'Finding...' : 'Find Recipes'}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => searchRecipes()}
+                      disabled={loadingRecipes || allItemNames.length === 0}
+                      className="bg-amber-500 hover:bg-amber-600"
+                    >
+                      {loadingRecipes ? 'Finding...' : 'Find Recipes'}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Search recipes with available ingredients</TooltipContent>
+                </Tooltip>
               </div>
             </CardHeader>
             <CardContent>
@@ -616,14 +626,19 @@ export function PublicInventoryView({
                   </div>
                   {hasMore && (
                     <div className="flex justify-center mt-4">
-                      <Button
-                        onClick={loadMoreRecipes}
-                        disabled={loadingMore}
-                        variant="outline"
-                        className="w-full max-w-xs"
-                      >
-                        {loadingMore ? 'Loading more...' : 'Load More Recipes'}
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={loadMoreRecipes}
+                            disabled={loadingMore}
+                            variant="outline"
+                            className="w-full max-w-xs"
+                          >
+                            {loadingMore ? 'Loading more...' : 'Load More Recipes'}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Show additional recipe suggestions</TooltipContent>
+                      </Tooltip>
                     </div>
                   )}
                 </>

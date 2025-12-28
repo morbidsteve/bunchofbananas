@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { User } from '@supabase/supabase-js'
 
 interface DashboardNavProps {
@@ -65,6 +67,8 @@ export function DashboardNav({ user, household }: DashboardNavProps) {
 
           {/* User Menu */}
           <div className="flex items-center gap-2">
+            <ThemeToggle />
+
             {/* Mobile Menu */}
             <Sheet>
               <SheetTrigger asChild className="md:hidden">
@@ -90,15 +94,20 @@ export function DashboardNav({ user, household }: DashboardNavProps) {
             </Sheet>
 
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full" aria-label="Open user menu">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-amber-100 text-amber-700">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-10 w-10 rounded-full" aria-label="Open user menu">
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback className="bg-amber-100 text-amber-700">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Account menu</TooltipContent>
+              </Tooltip>
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{user.email}</p>

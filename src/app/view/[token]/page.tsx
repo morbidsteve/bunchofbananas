@@ -92,6 +92,8 @@ export default async function PublicViewPage({ params }: PageProps) {
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         <PublicInventoryView
           householdName={household.name}
+          householdId={household.id}
+          shareToken={token}
           inventory={(inventory || []) as any}
           storageUnits={(storageUnits || []) as any}
         />

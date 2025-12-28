@@ -16,9 +16,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // Lazy load the barcode scanner to avoid SSR issues
 const BarcodeScanner = lazy(() =>
@@ -118,6 +129,10 @@ export function InventoryList({
     priority: 'normal' as 'normal' | 'use_soon' | 'urgent',
     conditionNotes: '',
   })
+
+  // Delete confirmation state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null)
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -344,9 +359,18 @@ export function InventoryList({
     setLoading(false)
   }
 
-  async function handleRemoveItem(inventoryId: string) {
+  function handleRemoveItem(inv: InventoryItem) {
+    setDeletingItem(inv)
+    setDeleteDialogOpen(true)
+  }
+
+  async function confirmDelete() {
+    if (!deletingItem) return
     const supabase = createClient()
-    await supabase.from('inventory').delete().eq('id', inventoryId)
+    await supabase.from('inventory').delete().eq('id', deletingItem.id)
+    toast.success(`Removed ${deletingItem.items?.name || 'item'} from inventory`)
+    setDeleteDialogOpen(false)
+    setDeletingItem(null)
     router.refresh()
   }
 
@@ -602,22 +626,32 @@ export function InventoryList({
           <p className="text-gray-600 mt-1">All items across your storage</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowScanner(true)}
-            disabled={!hasShelves || lookingUpBarcode}
-          >
-            {lookingUpBarcode ? 'Looking up...' : '📷 Scan'}
-          </Button>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button
-                className="bg-amber-500 hover:bg-amber-600"
-                disabled={!hasShelves}
+                variant="outline"
+                onClick={() => setShowScanner(true)}
+                disabled={!hasShelves || lookingUpBarcode}
               >
-                + Add Item
+                {lookingUpBarcode ? 'Looking up...' : '📷 Scan'}
               </Button>
-            </DialogTrigger>
+            </TooltipTrigger>
+            <TooltipContent>Scan barcode to add item</TooltipContent>
+          </Tooltip>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DialogTrigger asChild>
+                  <Button
+                    className="bg-amber-500 hover:bg-amber-600"
+                    disabled={!hasShelves}
+                  >
+                    + Add Item
+                  </Button>
+                </DialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Add new item to inventory</TooltipContent>
+            </Tooltip>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Add Item to Inventory</DialogTitle>
@@ -1140,70 +1174,101 @@ export function InventoryList({
                         {/* Quantity Controls */}
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {!isDepleted && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openPriorityDialog(inv)}
-                              className={hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-500'}
-                              aria-label={`Set priority for ${inv.items?.name}`}
-                            >
-                              ⚡
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openPriorityDialog(inv)}
+                                  className={hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-500'}
+                                  aria-label={`Set priority for ${inv.items?.name}`}
+                                >
+                                  ⚡
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Set priority (use soon/urgent)</TooltipContent>
+                            </Tooltip>
                           )}
                           {isDepleted ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRestockItem(inv)}
-                              disabled={isUpdating}
-                              className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                            >
-                              {isUpdating ? '...' : 'Restock'}
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRestockItem(inv)}
+                                  disabled={isUpdating}
+                                  className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                                >
+                                  {isUpdating ? '...' : 'Restock'}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Restore quantity to 1</TooltipContent>
+                            </Tooltip>
                           ) : (
                             <>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-9 w-9 text-lg font-bold"
-                                onClick={() => handleQuantityChange(inv, -1)}
-                                disabled={isUpdating}
-                                aria-label={`Decrease quantity of ${inv.items?.name}`}
-                              >
-                                -
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-9 w-9 text-lg font-bold"
+                                    onClick={() => handleQuantityChange(inv, -1)}
+                                    disabled={isUpdating}
+                                    aria-label={`Decrease quantity of ${inv.items?.name}`}
+                                  >
+                                    -
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Use one</TooltipContent>
+                              </Tooltip>
                               <div className="w-16 text-center">
                                 <div className="font-semibold">{inv.quantity}</div>
                                 <div className="text-xs text-gray-500">{inv.unit}</div>
                               </div>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-9 w-9 text-lg font-bold"
-                                onClick={() => handleQuantityChange(inv, 1)}
-                                disabled={isUpdating}
-                                aria-label={`Increase quantity of ${inv.items?.name}`}
-                              >
-                                +
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-9 w-9 text-lg font-bold"
+                                    onClick={() => handleQuantityChange(inv, 1)}
+                                    disabled={isUpdating}
+                                    aria-label={`Increase quantity of ${inv.items?.name}`}
+                                  >
+                                    +
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Add one</TooltipContent>
+                              </Tooltip>
                             </>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-gray-600 hover:bg-gray-100"
-                            onClick={() => openEditDialog(inv)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:bg-red-50"
-                            onClick={() => handleRemoveItem(inv.id)}
-                          >
-                            Remove
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-gray-600 hover:bg-gray-100"
+                                onClick={() => openEditDialog(inv)}
+                              >
+                                Edit
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit item details</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:bg-red-50"
+                                onClick={() => handleRemoveItem(inv)}
+                                aria-label={`Remove ${inv.items?.name || 'item'} from inventory`}
+                              >
+                                Remove
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Remove from inventory</TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
                     </CardContent>
@@ -1268,70 +1333,101 @@ export function InventoryList({
                     {/* Quantity Controls */}
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {!isDepleted && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openPriorityDialog(inv)}
-                          className={hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-500'}
-                          aria-label={`Set priority for ${inv.items?.name}`}
-                        >
-                          ⚡
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openPriorityDialog(inv)}
+                              className={hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-500'}
+                              aria-label={`Set priority for ${inv.items?.name}`}
+                            >
+                              ⚡
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Set priority (use soon/urgent)</TooltipContent>
+                        </Tooltip>
                       )}
                       {isDepleted ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRestockItem(inv)}
-                          disabled={isUpdating}
-                          className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                        >
-                          {isUpdating ? '...' : 'Restock'}
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRestockItem(inv)}
+                              disabled={isUpdating}
+                              className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                            >
+                              {isUpdating ? '...' : 'Restock'}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Restore quantity to 1</TooltipContent>
+                        </Tooltip>
                       ) : (
                         <>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9 text-lg font-bold"
-                            onClick={() => handleQuantityChange(inv, -1)}
-                            disabled={isUpdating}
-                            aria-label={`Decrease quantity of ${inv.items?.name}`}
-                          >
-                            -
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 text-lg font-bold"
+                                onClick={() => handleQuantityChange(inv, -1)}
+                                disabled={isUpdating}
+                                aria-label={`Decrease quantity of ${inv.items?.name}`}
+                              >
+                                -
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Use one</TooltipContent>
+                          </Tooltip>
                           <div className="w-16 text-center">
                             <div className="font-semibold">{inv.quantity}</div>
                             <div className="text-xs text-gray-500">{inv.unit}</div>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9 text-lg font-bold"
-                            onClick={() => handleQuantityChange(inv, 1)}
-                            disabled={isUpdating}
-                            aria-label={`Increase quantity of ${inv.items?.name}`}
-                          >
-                            +
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 text-lg font-bold"
+                                onClick={() => handleQuantityChange(inv, 1)}
+                                disabled={isUpdating}
+                                aria-label={`Increase quantity of ${inv.items?.name}`}
+                              >
+                                +
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Add one</TooltipContent>
+                          </Tooltip>
                         </>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-gray-600 hover:bg-gray-100"
-                        onClick={() => openEditDialog(inv)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:bg-red-50"
-                        onClick={() => handleRemoveItem(inv.id)}
-                      >
-                        Remove
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-gray-600 hover:bg-gray-100"
+                            onClick={() => openEditDialog(inv)}
+                          >
+                            Edit
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit item details</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:bg-red-50"
+                            onClick={() => handleRemoveItem(inv)}
+                            aria-label={`Remove ${inv.items?.name || 'item'} from inventory`}
+                          >
+                            Remove
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Remove from inventory</TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 </CardContent>
@@ -1340,6 +1436,28 @@ export function InventoryList({
           })}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Item</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove {deletingItem?.items?.name || 'this item'} from your inventory?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingItem(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Priority Dialog */}
       <Dialog open={priorityDialogOpen} onOpenChange={setPriorityDialogOpen}>

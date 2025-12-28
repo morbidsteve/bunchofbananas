@@ -379,13 +379,10 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Verify user is authenticated
+    // Check authentication - allow public access for TheMealDB recipes
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
-    const { ingredients, householdId, page = 0, limit = 8 } = await request.json()
+    const { ingredients, householdId, shareToken, page = 0, limit = 8 } = await request.json()
 
     // Validate input
     if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
@@ -395,25 +392,49 @@ export async function POST(request: NextRequest) {
     // Limit ingredients to prevent abuse (max 200 ingredients)
     const validIngredients = ingredients.slice(0, 200).map(i => String(i).slice(0, 100))
 
-    // Verify user has access to the household if provided
-    if (householdId) {
-      const { data: membership } = await supabase
-        .from('household_members')
-        .select('household_id')
-        .eq('user_id', user.id)
-        .eq('household_id', householdId)
-        .single()
+    // For household access, verify either:
+    // 1. User is authenticated and member of household
+    // 2. Household is public (via share token)
+    let canAccessHouseholdRecipes = false
+    let verifiedHouseholdId: string | null = null
 
-      if (!membership) {
-        return NextResponse.json({ error: 'Access denied to household' }, { status: 403 })
+    if (householdId) {
+      if (user) {
+        // Authenticated user - check membership
+        const { data: membership } = await supabase
+          .from('household_members')
+          .select('household_id')
+          .eq('user_id', user.id)
+          .eq('household_id', householdId)
+          .single()
+
+        if (membership) {
+          canAccessHouseholdRecipes = true
+          verifiedHouseholdId = householdId
+        }
+      }
+
+      // Check if household is public (via share token or is_public flag)
+      if (!canAccessHouseholdRecipes && shareToken) {
+        const { data: publicHousehold } = await supabase
+          .from('households')
+          .select('id')
+          .eq('share_token', shareToken)
+          .eq('is_public', true)
+          .single()
+
+        if (publicHousehold && publicHousehold.id === householdId) {
+          canAccessHouseholdRecipes = true
+          verifiedHouseholdId = householdId
+        }
       }
     }
 
     const recipes: Recipe[] = []
     const seenMealIds = new Set<string>()
 
-    // Fetch user recipes if householdId is provided
-    if (householdId) {
+    // Fetch user recipes if user has access to household
+    if (canAccessHouseholdRecipes && verifiedHouseholdId) {
       try {
         const { data: userRecipes } = await supabase
           .from('user_recipes')
@@ -421,7 +442,7 @@ export async function POST(request: NextRequest) {
             *,
             recipe_ingredients (*)
           `)
-          .eq('household_id', householdId)
+          .eq('household_id', verifiedHouseholdId)
 
         if (userRecipes) {
           for (const recipe of userRecipes) {

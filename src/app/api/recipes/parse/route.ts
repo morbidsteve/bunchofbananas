@@ -1,15 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rate-limit'
 import type { ParsedRecipeData, ParsedIngredient } from '@/types/recipes'
+
+const MAX_TEXT_LENGTH = 100000 // 100KB max text input
 
 // POST: Parse recipe text into structured data
 export async function POST(request: NextRequest) {
-  const { text } = await request.json()
+  // Rate limiting for expensive operations
+  const clientIP = getClientIP(request.headers)
+  const rateLimit = checkRateLimit(`parse:${clientIP}`, RATE_LIMITS.expensive)
+
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.ceil((rateLimit.resetTime - Date.now()) / 1000)),
+        },
+      }
+    )
+  }
+
+  // Require authentication
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await request.json()
+  const { text } = body
 
   if (!text || typeof text !== 'string') {
     return NextResponse.json({ error: 'No text provided' }, { status: 400 })
   }
 
-  const parsed = parseRecipeText(text)
+  // Limit input size
+  const sanitizedText = text.slice(0, MAX_TEXT_LENGTH)
+  const parsed = parseRecipeText(sanitizedText)
 
   return NextResponse.json(parsed)
 }

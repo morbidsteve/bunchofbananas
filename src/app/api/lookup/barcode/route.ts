@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rate-limit'
 
 interface OpenFoodFactsProduct {
   product_name?: string
@@ -34,6 +36,32 @@ interface ProductInfo {
 }
 
 export async function GET(request: NextRequest) {
+  // Rate limiting
+  const clientIP = getClientIP(request.headers)
+  const rateLimit = checkRateLimit(`barcode:${clientIP}`, RATE_LIMITS.standard)
+
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.ceil((rateLimit.resetTime - Date.now()) / 1000)),
+        },
+      }
+    )
+  }
+
+  // Require authentication
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const searchParams = request.nextUrl.searchParams
   const barcode = searchParams.get('barcode')
 
@@ -44,10 +72,19 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // Validate barcode format (should be numeric, 8-14 digits typically)
+  const sanitizedBarcode = barcode.replace(/\D/g, '').slice(0, 14)
+  if (sanitizedBarcode.length < 8) {
+    return NextResponse.json(
+      { error: 'Invalid barcode format' },
+      { status: 400 }
+    )
+  }
+
   try {
-    // Query Open Food Facts API
+    // Query Open Food Facts API with sanitized barcode
     const response = await fetch(
-      `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
+      `https://world.openfoodfacts.org/api/v0/product/${sanitizedBarcode}.json`,
       {
         headers: {
           'User-Agent': 'BunchOfBananas/1.0 (contact@example.com)',
@@ -75,7 +112,7 @@ export async function GET(request: NextRequest) {
       name: product.product_name || 'Unknown Product',
       brand: product.brands || null,
       category: product.categories?.split(',')[0]?.trim() || null,
-      barcode,
+      barcode: sanitizedBarcode,
       nutriscore: product.nutriscore_grade?.toUpperCase() || null,
       nutrition: {
         calories: nutriments['energy-kcal_100g'] ?? null,

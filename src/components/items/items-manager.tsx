@@ -17,6 +17,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface InventoryEntry {
   id: string
@@ -329,21 +330,31 @@ export function ItemsManager({
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEditDialog(item)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600 hover:bg-red-50"
-                          onClick={() => handleDeleteItem(item)}
-                        >
-                          Delete
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditDialog(item)}
+                            >
+                              Edit
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Edit item details</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:bg-red-50"
+                              onClick={() => handleDeleteItem(item)}
+                            >
+                              Delete
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Delete item and inventory</TooltipContent>
+                        </Tooltip>
                       </div>
                     </div>
 
@@ -377,13 +388,18 @@ export function ItemsManager({
                                   </div>
                                 </div>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => openMoveDialog(item, inv)}
-                              >
-                                Move
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => openMoveDialog(item, inv)}
+                                  >
+                                    Move
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Move to different location</TooltipContent>
+                              </Tooltip>
                             </div>
                           ))}
                         </div>

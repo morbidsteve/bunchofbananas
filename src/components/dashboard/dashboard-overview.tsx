@@ -22,6 +22,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { ActivityFeed } from './activity-feed'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface ExpiringItem {
   id: string
@@ -386,11 +387,16 @@ export function DashboardOverview({
         </div>
         {hasShelves && (
           <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-amber-500 hover:bg-amber-600">
-                + Add Item
-              </Button>
-            </DialogTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DialogTrigger asChild>
+                  <Button className="bg-amber-500 hover:bg-amber-600">
+                    + Add Item
+                  </Button>
+                </DialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Quick add item to inventory</TooltipContent>
+            </Tooltip>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Add Item to Inventory</DialogTitle>
@@ -596,7 +602,7 @@ export function DashboardOverview({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <span>🗄️</span> Storage Units
+              <span aria-hidden="true">🗄️</span> Storage Units
             </CardTitle>
             <CardDescription>
               {storageCount === 0
@@ -617,7 +623,7 @@ export function DashboardOverview({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <span>📦</span> Inventory
+              <span aria-hidden="true">📦</span> Inventory
             </CardTitle>
             <CardDescription>
               {inventoryCount === 0
@@ -646,7 +652,7 @@ export function DashboardOverview({
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-amber-700">
-                  <span>🛒</span> Need to Restock
+                  <span aria-hidden="true">🛒</span> Need to Restock
                 </CardTitle>
                 <CardDescription>
                   Items that have run out - click to restock when you buy more
@@ -677,13 +683,18 @@ export function DashboardOverview({
                       </Badge>
                     )}
                   </div>
-                  <Button
-                    onClick={() => handleRestockItem(item)}
-                    className="bg-green-600 hover:bg-green-700"
-                    size="sm"
-                  >
-                    Restock
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => handleRestockItem(item)}
+                        className="bg-green-600 hover:bg-green-700"
+                        size="sm"
+                      >
+                        Restock
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Mark as back in stock</TooltipContent>
+                  </Tooltip>
                 </div>
               ))}
             </div>
@@ -696,7 +707,7 @@ export function DashboardOverview({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-red-600">
-              <span>⚠️</span> Expiring Soon
+              <span aria-hidden="true">⚠️</span> Expiring Soon
             </CardTitle>
             <CardDescription>
               These items are expiring within the next 7 days
@@ -730,19 +741,24 @@ export function DashboardOverview({
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-orange-600">
-                  <span>⚡</span> Use These Soon
+                  <span aria-hidden="true">⚡</span> Use These Soon
                 </CardTitle>
                 <CardDescription>
                   Items marked for priority use - perfect for recipe planning
                 </CardDescription>
               </div>
-              <Button
-                onClick={() => searchRecipes()}
-                disabled={loadingRecipes}
-                className="bg-orange-500 hover:bg-orange-600"
-              >
-                {loadingRecipes ? 'Finding...' : '🍳 Find Recipes'}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => searchRecipes()}
+                    disabled={loadingRecipes}
+                    className="bg-orange-500 hover:bg-orange-600"
+                  >
+                    {loadingRecipes ? 'Finding...' : '🍳 Find Recipes'}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Find recipes using these items</TooltipContent>
+              </Tooltip>
             </div>
           </CardHeader>
           <CardContent>
@@ -838,7 +854,7 @@ export function DashboardOverview({
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <span>🍳</span> What Can I Make?
+                  <span aria-hidden="true">🍳</span> What Can I Make?
                 </CardTitle>
                 <CardDescription>
                   {selectedItems.size > 0
@@ -848,21 +864,31 @@ export function DashboardOverview({
                 </CardDescription>
               </div>
               <div className="flex gap-2">
-                <Button
-                  onClick={() => setShowItemSelector(!showItemSelector)}
-                  variant="outline"
-                  size="sm"
-                >
-                  {showItemSelector ? 'Hide Selection' : 'Select Items'}
-                  {selectedItems.size > 0 && ` (${selectedItems.size})`}
-                </Button>
-                <Button
-                  onClick={() => searchRecipes()}
-                  disabled={loadingRecipes}
-                  className="bg-amber-500 hover:bg-amber-600"
-                >
-                  {loadingRecipes ? 'Finding...' : 'Find Recipes'}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => setShowItemSelector(!showItemSelector)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      {showItemSelector ? 'Hide Selection' : 'Select Items'}
+                      {selectedItems.size > 0 && ` (${selectedItems.size})`}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Choose specific items to cook with</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => searchRecipes()}
+                      disabled={loadingRecipes}
+                      className="bg-amber-500 hover:bg-amber-600"
+                    >
+                      {loadingRecipes ? 'Finding...' : 'Find Recipes'}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Search for recipes matching your inventory</TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </CardHeader>

@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface StorageUnit {
   id: string
@@ -90,11 +91,16 @@ export function StorageList({ storageUnits, householdId }: StorageListProps) {
           <p className="text-gray-600 mt-1">Manage your fridges, freezers, and pantries</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-amber-500 hover:bg-amber-600">
-              + Add Storage
-            </Button>
-          </DialogTrigger>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DialogTrigger asChild>
+                <Button className="bg-amber-500 hover:bg-amber-600">
+                  + Add Storage
+                </Button>
+              </DialogTrigger>
+            </TooltipTrigger>
+            <TooltipContent>Create new fridge, freezer, or pantry</TooltipContent>
+          </Tooltip>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add Storage Unit</DialogTitle>
