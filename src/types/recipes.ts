@@ -136,6 +136,26 @@ const SYNONYMS: Record<string, string> = {
   'chicken broth': 'stock', 'vegetable stock': 'stock',
 }
 
+// Common pantry staples assumed to always be available
+const ALWAYS_AVAILABLE = new Set([
+  'water', 'ice', 'tap water', 'cold water', 'hot water', 'warm water', 'boiling water',
+  'salt', 'sea salt', 'table salt', 'kosher salt',
+  'pepper', 'black pepper', 'ground pepper',
+  'oil', 'cooking oil', 'vegetable oil', 'canola oil',
+])
+
+// Check if an ingredient is a common pantry staple (always available)
+function isAlwaysAvailable(ingredient: string): boolean {
+  const normalized = ingredient.toLowerCase().trim()
+  if (ALWAYS_AVAILABLE.has(normalized)) return true
+  for (const staple of ALWAYS_AVAILABLE) {
+    if (normalized.includes(staple) || staple.includes(normalized)) {
+      return true
+    }
+  }
+  return false
+}
+
 // Levenshtein distance for fuzzy matching (handles typos)
 function levenshteinDistance(a: string, b: string): number {
   const matrix: number[][] = []
@@ -203,6 +223,11 @@ export function hasIngredient(
   recipeIngredient: string,
   userIngredients: string[]
 ): boolean {
+  // First check if it's a common staple that's always assumed available
+  if (isAlwaysAvailable(recipeIngredient)) {
+    return true
+  }
+
   const recipeName = normalizeIngredientName(recipeIngredient)
   const recipeCore = getCoreIngredient(recipeIngredient)
   const recipeWords = recipeName.split(' ').filter((w) => w.length > 2)

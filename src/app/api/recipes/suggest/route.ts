@@ -78,6 +78,14 @@ const SYNONYMS: Record<string, string> = {
   'chicken broth': 'stock', 'vegetable stock': 'stock',
 }
 
+// Common pantry staples assumed to always be available
+const ALWAYS_AVAILABLE = new Set([
+  'water', 'ice', 'tap water', 'cold water', 'hot water', 'warm water', 'boiling water',
+  'salt', 'sea salt', 'table salt', 'kosher salt',
+  'pepper', 'black pepper', 'ground pepper',
+  'oil', 'cooking oil', 'vegetable oil', 'canola oil',
+])
+
 // Unit pattern with longer matches first to avoid partial matching
 const UNIT_PATTERN = '(tablespoons?|teaspoons?|pounds?|ounces?|cups?|tbsp|tsp|lbs?|kg|ml|oz|g|l)'
 
@@ -161,15 +169,29 @@ function isSimilar(a: string, b: string, threshold = 0.8): boolean {
   return similarity >= threshold
 }
 
+// Check if an ingredient is a common pantry staple (always available)
+function isAlwaysAvailable(ingredient: string): boolean {
+  const normalized = ingredient.toLowerCase().trim()
+  // Check direct match
+  if (ALWAYS_AVAILABLE.has(normalized)) return true
+  // Check if any always-available item is contained in the ingredient
+  for (const staple of ALWAYS_AVAILABLE) {
+    if (normalized.includes(staple) || staple.includes(normalized)) {
+      return true
+    }
+  }
+  return false
+}
+
 // Check if user has an ingredient (flexible matching with fuzzy support)
 function hasIngredient(recipeIngredient: string, userIngredients: string[]): boolean {
+  // First check if it's a common staple that's always assumed available
+  if (isAlwaysAvailable(recipeIngredient)) {
+    return true
+  }
+
   const recipeTerms = normalizeIngredient(recipeIngredient)
   const recipeCore = getCoreIngredient(recipeIngredient)
-
-  console.log(`[MATCH DEBUG] Recipe ingredient: "${recipeIngredient}"`)
-  console.log(`[MATCH DEBUG]   Normalized terms: ${JSON.stringify(recipeTerms)}`)
-  console.log(`[MATCH DEBUG]   Core: "${recipeCore}"`)
-  console.log(`[MATCH DEBUG]   User ingredients: ${JSON.stringify(userIngredients.slice(0, 5))}...`)
 
   for (const userIng of userIngredients) {
     const userTerms = normalizeIngredient(userIng)
@@ -178,7 +200,6 @@ function hasIngredient(recipeIngredient: string, userIngredients: string[]): boo
     // Check core ingredient match (with fuzzy matching for typos)
     if (recipeCore.length > 2 && userCore.length > 2) {
       if (recipeCore === userCore || isSimilar(recipeCore, userCore)) {
-        console.log(`[MATCH DEBUG]   ✓ MATCHED via core: "${recipeCore}" == "${userCore}"`)
         return true
       }
     }
@@ -188,17 +209,14 @@ function hasIngredient(recipeIngredient: string, userIngredients: string[]): boo
       for (const userTerm of userTerms) {
         // Exact match
         if (recipeTerm === userTerm) {
-          console.log(`[MATCH DEBUG]   ✓ MATCHED via exact term: "${recipeTerm}"`)
           return true
         }
         // Fuzzy match for longer terms
         if (recipeTerm.length >= 4 && userTerm.length >= 4) {
           if (isSimilar(recipeTerm, userTerm)) {
-            console.log(`[MATCH DEBUG]   ✓ MATCHED via fuzzy: "${recipeTerm}" ~ "${userTerm}"`)
             return true
           }
           if (recipeTerm.includes(userTerm) || userTerm.includes(recipeTerm)) {
-            console.log(`[MATCH DEBUG]   ✓ MATCHED via substring: "${recipeTerm}" <-> "${userTerm}"`)
             return true
           }
         }
@@ -206,7 +224,6 @@ function hasIngredient(recipeIngredient: string, userIngredients: string[]): boo
     }
   }
 
-  console.log(`[MATCH DEBUG]   ✗ NO MATCH FOUND`)
   return false
 }
 
@@ -304,10 +321,50 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Helper to fetch and process a meal by ID
+    async function processMeal(mealId: string): Promise<void> {
+      if (seenMealIds.has(mealId)) return
+      seenMealIds.add(mealId)
+
+      try {
+        const detailRes = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${mealId}`
+        )
+        if (!detailRes.ok) return
+
+        const detailData = await detailRes.json()
+        const mealDetail: MealDBMeal = detailData.meals?.[0]
+        if (!mealDetail) return
+
+        const recipeIngredients = extractIngredients(mealDetail, ingredients)
+        const matchedCount = recipeIngredients.filter(i => i.inStock).length
+        const totalIngredients = recipeIngredients.length
+
+        recipes.push({
+          id: mealDetail.idMeal,
+          title: mealDetail.strMeal,
+          image: mealDetail.strMealThumb,
+          url: mealDetail.strSource || `https://www.themealdb.com/meal/${mealId}`,
+          youtubeUrl: mealDetail.strYoutube || null,
+          category: mealDetail.strCategory || '',
+          area: mealDetail.strArea || '',
+          instructions: mealDetail.strInstructions || '',
+          ingredients: recipeIngredients,
+          matchedCount,
+          totalIngredients,
+          matchPercentage: totalIngredients > 0 ? Math.round((matchedCount / totalIngredients) * 100) : 0,
+          isUserRecipe: false,
+        })
+      } catch {
+        // Skip this meal if we can't get details
+      }
+    }
+
     // Shuffle ingredients to get different results each time
     const shuffledIngredients = shuffleArray(ingredients)
     const searchIngredients = shuffledIngredients.slice(0, 6)
 
+    // Search by ingredients
     for (const ingredient of searchIngredients) {
       try {
         const response = await fetch(
@@ -319,50 +376,36 @@ export async function POST(request: NextRequest) {
         const data = await response.json()
         const meals: MealDBMeal[] = data.meals || []
 
+        // Shuffle meals before selecting to get variety
+        const shuffledMeals = shuffleArray(meals)
+
         // Get details for meals we haven't seen yet
-        for (const meal of meals.slice(0, 4)) {
-          if (seenMealIds.has(meal.idMeal)) continue
-          seenMealIds.add(meal.idMeal)
-
-          try {
-            const detailRes = await fetch(
-              `https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`
-            )
-            if (!detailRes.ok) continue
-
-            const detailData = await detailRes.json()
-            const mealDetail: MealDBMeal = detailData.meals?.[0]
-            if (!mealDetail) continue
-
-            const recipeIngredients = extractIngredients(mealDetail, ingredients)
-            const matchedCount = recipeIngredients.filter(i => i.inStock).length
-            const totalIngredients = recipeIngredients.length
-
-            recipes.push({
-              id: mealDetail.idMeal,
-              title: mealDetail.strMeal,
-              image: mealDetail.strMealThumb,
-              url: mealDetail.strSource || `https://www.themealdb.com/meal/${meal.idMeal}`,
-              youtubeUrl: mealDetail.strYoutube || null,
-              category: mealDetail.strCategory || '',
-              area: mealDetail.strArea || '',
-              instructions: mealDetail.strInstructions || '',
-              ingredients: recipeIngredients,
-              matchedCount,
-              totalIngredients,
-              matchPercentage: totalIngredients > 0 ? Math.round((matchedCount / totalIngredients) * 100) : 0,
-              isUserRecipe: false,
-            })
-          } catch {
-            // Skip this meal if we can't get details
-          }
+        for (const meal of shuffledMeals.slice(0, 3)) {
+          await processMeal(meal.idMeal)
         }
       } catch {
         // Skip this ingredient if fetch fails
       }
 
       // Stop if we have enough recipes
-      if (recipes.length >= 15) break
+      if (recipes.length >= 12) break
+    }
+
+    // Add some random recipes for variety (especially good for discovering new meals)
+    const randomCount = Math.max(0, 5 - Math.floor(recipes.length / 3))
+    for (let i = 0; i < randomCount; i++) {
+      try {
+        const response = await fetch('https://www.themealdb.com/api/json/v1/1/random.php')
+        if (!response.ok) continue
+
+        const data = await response.json()
+        const meal: MealDBMeal = data.meals?.[0]
+        if (meal) {
+          await processMeal(meal.idMeal)
+        }
+      } catch {
+        // Skip if random fetch fails
+      }
     }
 
     // Sort recipes by match percentage (best matches first), user recipes first on tie
