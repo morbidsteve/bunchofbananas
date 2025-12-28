@@ -293,13 +293,13 @@ export function DashboardOverview({
         .filter(item => selectedItems.has(item.id))
         .map(item => item.name)
     } else {
-      // Otherwise, combine priority items with some regular items
+      // Send ALL inventory items for matching - the API handles search optimization
+      // Priority items go first, then the rest (no limit - we want accurate matching)
       const priorityIngredients = priorityItems.map(p => p.items?.name).filter(Boolean) as string[]
       const otherIngredients = allInventoryItems
         .map(i => i.name)
         .filter(name => !priorityIngredients.includes(name))
-        .slice(0, 5)
-      ingredients = [...priorityIngredients, ...otherIngredients].slice(0, 10)
+      ingredients = [...priorityIngredients, ...otherIngredients]
     }
 
     if (ingredients.length === 0) {
