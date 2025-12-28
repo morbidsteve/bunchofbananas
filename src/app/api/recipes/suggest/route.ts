@@ -85,8 +85,8 @@ const UNIT_PATTERN = '(tablespoons?|teaspoons?|pounds?|ounces?|cups?|tbsp|tsp|lb
 function normalizeIngredient(name: string): string[] {
   const lower = name.toLowerCase()
   // Strip leading non-word chars (symbols), quantities, and units like "○400g " or "2 cups "
-  // \W matches non-word chars (not [a-zA-Z0-9_]), so it won't eat digits
-  const leadingPattern = new RegExp(`^[\\W]*\\d*[\\d./]*\\s*${UNIT_PATTERN}?\\s*`, 'gi')
+  // IMPORTANT: Only match units when preceded by digits to avoid stripping "g" from "garlic"
+  const leadingPattern = new RegExp(`^[\\W]*\\d+[\\d./]*\\s*${UNIT_PATTERN}?\\s*`, 'gi')
   const inlinePattern = new RegExp(`\\b\\d+[\\d./]*\\s*${UNIT_PATTERN}?\\b`, 'gi')
   const withoutQuantities = lower
     .replace(leadingPattern, '')
@@ -111,7 +111,8 @@ function normalizeIngredient(name: string): string[] {
 function getCoreIngredient(name: string): string {
   const lower = name.toLowerCase()
   // Strip leading non-word chars (symbols), quantities, and units
-  const leadingPattern = new RegExp(`^[\\W]*\\d*[\\d./]*\\s*${UNIT_PATTERN}?\\s*`, 'gi')
+  // IMPORTANT: Only match units when preceded by digits to avoid stripping "g" from "garlic"
+  const leadingPattern = new RegExp(`^[\\W]*\\d+[\\d./]*\\s*${UNIT_PATTERN}?\\s*`, 'gi')
   const inlinePattern = new RegExp(`\\b\\d+[\\d./]*\\s*${UNIT_PATTERN}?\\b`, 'gi')
   const withoutQuantities = lower
     .replace(leadingPattern, '')
