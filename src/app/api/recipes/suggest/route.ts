@@ -78,14 +78,21 @@ const SYNONYMS: Record<string, string> = {
   'chicken broth': 'stock', 'vegetable stock': 'stock',
 }
 
+// Unit pattern with longer matches first to avoid partial matching
+const UNIT_PATTERN = '(tablespoons?|teaspoons?|pounds?|ounces?|cups?|tbsp|tsp|lbs?|kg|ml|oz|g|l)'
+
 // Normalize ingredient name for matching
 function normalizeIngredient(name: string): string[] {
   const lower = name.toLowerCase()
-  // Remove quantities like "400g", "1 cup", "2 lbs", "1/2", "○400g", etc.
-  // Use [^a-z]* to match ANY non-letter prefix (handles various OCR bullet chars)
+  // Strip leading non-letters, quantities, and units like "○400g " or "2 cups "
+  // This handles patterns like: "○400g Potatoes", "2 cups flour", "1/2 lb beef"
+  const leadingPattern = new RegExp(`^[^a-z]*\\d*[\\d./]*\\s*${UNIT_PATTERN}?\\s*`, 'gi')
+  const inlinePattern = new RegExp(`\\b\\d+[\\d./]*\\s*${UNIT_PATTERN}?\\b`, 'gi')
   const withoutQuantities = lower
-    .replace(/^[^a-z]*\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)?\s*/i, '')
-    .replace(/\b\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)\b/gi, '')
+    .replace(leadingPattern, '')
+    .replace(inlinePattern, '')
+    .replace(/\s+/g, ' ')
+    .trim()
   const descriptorPattern = new RegExp(`\\b(${DESCRIPTORS.join('|')})\\b`, 'g')
   const cleaned = withoutQuantities.replace(descriptorPattern, '').replace(/\s+/g, ' ').trim()
 
@@ -103,11 +110,14 @@ function normalizeIngredient(name: string): string[] {
 // Get core ingredient (main noun)
 function getCoreIngredient(name: string): string {
   const lower = name.toLowerCase()
-  // Remove quantities like "400g", "1 cup", "○400g", etc.
-  // Use [^a-z]* to match ANY non-letter prefix (handles various OCR bullet chars)
+  // Strip leading non-letters, quantities, and units
+  const leadingPattern = new RegExp(`^[^a-z]*\\d*[\\d./]*\\s*${UNIT_PATTERN}?\\s*`, 'gi')
+  const inlinePattern = new RegExp(`\\b\\d+[\\d./]*\\s*${UNIT_PATTERN}?\\b`, 'gi')
   const withoutQuantities = lower
-    .replace(/^[^a-z]*\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)?\s*/i, '')
-    .replace(/\b\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)\b/gi, '')
+    .replace(leadingPattern, '')
+    .replace(inlinePattern, '')
+    .replace(/\s+/g, ' ')
+    .trim()
   const descriptorPattern = new RegExp(`\\b(${DESCRIPTORS.join('|')})\\b`, 'g')
   const cleaned = withoutQuantities.replace(descriptorPattern, '').replace(/\s+/g, ' ').trim()
   const words = cleaned.split(' ')
