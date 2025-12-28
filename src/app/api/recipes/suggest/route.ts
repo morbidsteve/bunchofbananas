@@ -530,13 +530,19 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Generate a YouTube search URL for fresh, relevant videos instead of using
+        // the potentially outdated pre-stored video links from TheMealDB
+        const youtubeSearchQuery = encodeURIComponent(`${mealDetail.strMeal} recipe`)
+        const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${youtubeSearchQuery}&sp=CAISBAgCEAE`
+        // sp=CAISBAgCEAE sorts by upload date for more recent videos
+
         recipes.push({
           id: mealDetail.idMeal,
           title: mealDetail.strMeal,
           description: generateRecipeDescription(mealDetail.strMeal, category, area, totalIngredients),
           image: mealDetail.strMealThumb,
           url: mealDetail.strSource || `https://www.themealdb.com/meal/${mealId}`,
-          youtubeUrl: mealDetail.strYoutube || null,
+          youtubeUrl: youtubeSearchUrl,
           category,
           area,
           instructions: mealDetail.strInstructions || '',
