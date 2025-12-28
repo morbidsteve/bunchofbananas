@@ -177,8 +177,9 @@ const UNIT_PATTERN = '(tablespoons?|teaspoons?|pounds?|ounces?|cups?|tbsp|tsp|lb
 // Normalize ingredient name for matching
 export function normalizeIngredientName(name: string): string {
   const lower = name.toLowerCase()
-  // Strip leading non-letters, quantities, and units like "○400g " or "2 cups "
-  const leadingPattern = new RegExp(`^[^a-z]*\\d*[\\d./]*\\s*${UNIT_PATTERN}?\\s*`, 'gi')
+  // Strip leading non-word chars (symbols), quantities, and units like "○400g " or "2 cups "
+  // \W matches non-word chars (not [a-zA-Z0-9_]), so it won't eat digits
+  const leadingPattern = new RegExp(`^[\\W]*\\d*[\\d./]*\\s*${UNIT_PATTERN}?\\s*`, 'gi')
   const inlinePattern = new RegExp(`\\b\\d+[\\d./]*\\s*${UNIT_PATTERN}?\\b`, 'gi')
   const withoutQuantities = lower
     .replace(leadingPattern, '')

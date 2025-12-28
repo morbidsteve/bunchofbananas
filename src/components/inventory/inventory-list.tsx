@@ -130,6 +130,18 @@ export function InventoryList({
     expirationDate: '',
   })
 
+  // Nutrition data from barcode scan
+  const [scannedNutrition, setScannedNutrition] = useState<{
+    calories: number | null
+    protein_g: number | null
+    carbs_g: number | null
+    fat_g: number | null
+    fiber_g: number | null
+    sugar_g: number | null
+    sodium_mg: number | null
+    nutriscore: string | null
+  } | null>(null)
+
   const [formData, setFormData] = useState({
     itemId: '',
     newItemName: '',
@@ -367,6 +379,7 @@ export function InventoryList({
     setShowScanner(false)
     setLookingUpBarcode(true)
     setScannedBarcode(barcode)
+    setScannedNutrition(null) // Reset nutrition data
 
     try {
       const response = await fetch(`/api/lookup/barcode?barcode=${encodeURIComponent(barcode)}`)
@@ -383,8 +396,22 @@ export function InventoryList({
           quantity: '1',
           unit: 'count',
         })
+        // Save nutrition data from barcode lookup
+        if (product.nutrition) {
+          setScannedNutrition({
+            calories: product.nutrition.calories,
+            protein_g: product.nutrition.protein_g,
+            carbs_g: product.nutrition.carbs_g,
+            fat_g: product.nutrition.fat_g,
+            fiber_g: product.nutrition.fiber_g,
+            sugar_g: product.nutrition.sugar_g,
+            sodium_mg: product.nutrition.sodium_mg,
+            nutriscore: product.nutriscore || null,
+          })
+        }
         setDialogOpen(true)
-        toast.success(`Found: ${product.name}`)
+        const hasNutrition = product.nutrition?.calories != null
+        toast.success(`Found: ${product.name}${hasNutrition ? ' (with nutrition info)' : ''}`)
       } else {
         // Product not found, open dialog with just the barcode
         setIsNewItem(true)
