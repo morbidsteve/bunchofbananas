@@ -7,7 +7,7 @@ export default function Home() {
       <div className="container mx-auto px-4 py-16">
         <nav className="flex justify-between items-center mb-16">
           <div className="flex items-center gap-2">
-            <span className="text-3xl">🍌</span>
+            <span className="text-3xl" aria-hidden="true">🍌</span>
             <span className="text-xl font-bold text-gray-800">BunchOfBananas</span>
           </div>
           <div className="flex gap-4">
@@ -36,21 +36,21 @@ export default function Home() {
 
           <div className="grid md:grid-cols-3 gap-8 mt-20">
             <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
-              <div className="text-4xl mb-4">🗄️</div>
+              <div className="text-4xl mb-4" aria-hidden="true">🗄️</div>
               <h3 className="text-xl font-semibold mb-2">Organize Storage</h3>
               <p className="text-gray-600">
                 Map out your fridges, freezers, and pantries. Add shelves and know exactly where everything is.
               </p>
             </div>
             <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
-              <div className="text-4xl mb-4">💰</div>
+              <div className="text-4xl mb-4" aria-hidden="true">💰</div>
               <h3 className="text-xl font-semibold mb-2">Track Prices</h3>
               <p className="text-gray-600">
                 Record what you pay and where. See price history and know when you&apos;re getting a good deal.
               </p>
             </div>
             <div className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-lg">
-              <div className="text-4xl mb-4">📊</div>
+              <div className="text-4xl mb-4" aria-hidden="true">📊</div>
               <h3 className="text-xl font-semibold mb-2">Get Insights</h3>
               <p className="text-gray-600">
                 See what you use most, what expires, and reduce food waste with smart analytics.

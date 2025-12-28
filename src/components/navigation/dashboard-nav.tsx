@@ -43,7 +43,7 @@ export function DashboardNav({ user, household }: DashboardNavProps) {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/dashboard" className="flex items-center gap-2">
-            <span className="text-2xl">🍌</span>
+            <span className="text-2xl" aria-hidden="true">🍌</span>
             <span className="font-bold text-gray-900 hidden sm:inline">
               {household?.name || 'BunchOfBananas'}
             </span>

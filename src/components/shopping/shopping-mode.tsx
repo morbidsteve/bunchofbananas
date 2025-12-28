@@ -65,7 +65,7 @@ export function ShoppingMode({ inventory, depletedItems = [] }: ShoppingModeProp
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <div className="text-4xl mb-2">🛒</div>
+        <div className="text-4xl mb-2" aria-hidden="true">🛒</div>
         <h1 className="text-3xl font-bold text-gray-900">Shopping Mode</h1>
         <p className="text-gray-600 mt-1">Search to see what you have at home</p>
       </div>
@@ -87,7 +87,7 @@ export function ShoppingMode({ inventory, depletedItems = [] }: ShoppingModeProp
           {filteredInventory.length === 0 ? (
             <Card className="bg-red-50 border-red-200">
               <CardContent className="py-6 text-center">
-                <div className="text-3xl mb-2">❌</div>
+                <div className="text-3xl mb-2" aria-hidden="true">❌</div>
                 <p className="text-lg font-medium text-red-800">
                   No &quot;{search}&quot; found at home
                 </p>
@@ -100,7 +100,7 @@ export function ShoppingMode({ inventory, depletedItems = [] }: ShoppingModeProp
             <>
               <Card className="bg-green-50 border-green-200">
                 <CardContent className="py-4 text-center">
-                  <div className="text-2xl mb-1">✓</div>
+                  <div className="text-2xl mb-1" aria-hidden="true">✓</div>
                   <p className="font-medium text-green-800">
                     Found {filteredInventory.length} matching item{filteredInventory.length !== 1 ? 's' : ''}
                   </p>
@@ -182,7 +182,7 @@ export function ShoppingMode({ inventory, depletedItems = [] }: ShoppingModeProp
         <div className="max-w-lg mx-auto mt-8 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <span>📝</span> Needs Restocking ({depletedItems.length})
+              <span aria-hidden="true">📝</span> Needs Restocking ({depletedItems.length})
             </h2>
             <button
               onClick={() => setShowRestockList(!showRestockList)}
@@ -205,7 +205,7 @@ export function ShoppingMode({ inventory, depletedItems = [] }: ShoppingModeProp
                       className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-amber-200"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">🛒</span>
+                        <span className="text-lg" aria-hidden="true">🛒</span>
                         <span className="font-medium">{item.name}</span>
                       </div>
                       {item.category && (

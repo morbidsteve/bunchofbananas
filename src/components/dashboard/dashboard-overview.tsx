@@ -797,9 +797,10 @@ export function DashboardOverview({
                 <h4 className="font-semibold text-gray-700 mb-3">🍽️ Recipe Ideas ({recipes.length} found)</h4>
                 <div className="grid md:grid-cols-2 gap-3">
                   {recipes.map((recipe) => (
-                    <div
+                    <button
                       key={recipe.id}
-                      className="bg-white border border-orange-100 rounded-lg overflow-hidden hover:border-orange-300 transition-colors cursor-pointer"
+                      type="button"
+                      className="bg-white border border-orange-100 rounded-lg overflow-hidden hover:border-orange-300 transition-colors cursor-pointer text-left w-full focus:outline-none focus:ring-2 focus:ring-orange-500"
                       onClick={() => setSelectedRecipe(recipe)}
                     >
                       <div className="flex">
@@ -838,7 +839,7 @@ export function DashboardOverview({
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -940,9 +941,10 @@ export function DashboardOverview({
               <>
                 <div className="grid md:grid-cols-2 gap-3">
                   {recipes.map((recipe) => (
-                    <div
+                    <button
                       key={recipe.id}
-                      className="bg-gray-50 border rounded-lg overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer"
+                      type="button"
+                      className="bg-gray-50 border rounded-lg overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer text-left w-full focus:outline-none focus:ring-2 focus:ring-amber-500"
                       onClick={() => setSelectedRecipe(recipe)}
                     >
                       <div className="flex">
@@ -981,7 +983,7 @@ export function DashboardOverview({
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
                 {/* Load More Button */}

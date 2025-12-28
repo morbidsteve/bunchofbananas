@@ -557,7 +557,7 @@ export function PublicInventoryView({
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <span>🍳</span> What Can I Make?
+                    <span aria-hidden="true">🍳</span> What Can I Make?
                   </CardTitle>
                   <CardDescription>
                     Find recipes based on {householdName}&apos;s inventory ({allItemNames.length} items available)
@@ -592,9 +592,10 @@ export function PublicInventoryView({
                 <>
                   <div className="grid md:grid-cols-2 gap-3">
                     {recipes.map((recipe) => (
-                      <div
+                      <button
                         key={recipe.id}
-                        className="bg-gray-50 border rounded-lg overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer"
+                        type="button"
+                        className="bg-gray-50 border rounded-lg overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer text-left w-full focus:outline-none focus:ring-2 focus:ring-amber-500"
                         onClick={() => setSelectedRecipe(recipe)}
                       >
                         <div className="flex">
@@ -621,7 +622,7 @@ export function PublicInventoryView({
                             </p>
                           </div>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                   {hasMore && (
@@ -651,7 +652,7 @@ export function PublicInventoryView({
             <Card className="border-orange-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-orange-600">
-                  <span>⚡</span> Use These First
+                  <span aria-hidden="true">⚡</span> Use These First
                 </CardTitle>
                 <CardDescription>
                   Items marked as priority - recipes will prioritize these ingredients
@@ -689,7 +690,7 @@ export function PublicInventoryView({
             <Card className="border-red-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-red-600">
-                  <span>⚠️</span> Expiring Soon
+                  <span aria-hidden="true">⚠️</span> Expiring Soon
                 </CardTitle>
                 <CardDescription>
                   These items are expiring within the next 7 days
@@ -728,7 +729,7 @@ export function PublicInventoryView({
             <Card className="border-orange-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-orange-600">
-                  <span>⚡</span> Use These Soon
+                  <span aria-hidden="true">⚡</span> Use These Soon
                 </CardTitle>
                 <CardDescription>
                   Items marked for priority use
@@ -770,7 +771,7 @@ export function PublicInventoryView({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span>🛒</span> Shopping List
+                <span aria-hidden="true">🛒</span> Shopping List
               </CardTitle>
               <CardDescription>
                 Depleted items that need restocking
@@ -813,7 +814,7 @@ export function PublicInventoryView({
             <Card className="border-yellow-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-yellow-700">
-                  <span>⚠️</span> Running Low
+                  <span aria-hidden="true">⚠️</span> Running Low
                 </CardTitle>
                 <CardDescription>
                   Items with only 1 remaining

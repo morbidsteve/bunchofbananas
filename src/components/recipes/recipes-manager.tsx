@@ -847,8 +847,12 @@ Instructions:
             return (
               <Card
                 key={recipe.id}
-                className="hover:shadow-lg transition-shadow cursor-pointer"
+                className="hover:shadow-lg transition-shadow cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500"
                 onClick={() => setViewingRecipe(recipe)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewingRecipe(recipe); }}}
+                role="button"
+                tabIndex={0}
+                aria-label={`View recipe: ${recipe.title}`}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">

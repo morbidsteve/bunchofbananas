@@ -77,7 +77,7 @@ export default async function PublicViewPage({ params }: PageProps) {
         <div className="container mx-auto px-4 max-w-4xl">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">🍌</span>
+              <span className="text-2xl" aria-hidden="true">🍌</span>
               <span className="font-bold text-gray-900">{household.name}</span>
               <Badge variant="outline">View Only</Badge>
             </div>

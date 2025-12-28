@@ -114,7 +114,7 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <span>📋</span> Recent Activity
+            <span aria-hidden="true">📋</span> Recent Activity
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -139,7 +139,7 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <span>📋</span> Recent Activity
+            <span aria-hidden="true">📋</span> Recent Activity
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -154,7 +154,7 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <span>📋</span> Recent Activity
+            <span aria-hidden="true">📋</span> Recent Activity
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -170,7 +170,7 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <span>📋</span> Recent Activity
+          <span aria-hidden="true">📋</span> Recent Activity
         </CardTitle>
       </CardHeader>
       <CardContent>

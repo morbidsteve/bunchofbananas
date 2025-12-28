@@ -34,7 +34,7 @@ export default async function PublicRecipePage({ params }: PageProps) {
       <header className="bg-white border-b">
         <div className="container mx-auto px-4 max-w-4xl py-4">
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-2xl">🍌</span>
+            <span className="text-2xl" aria-hidden="true">🍌</span>
             <span className="font-bold text-gray-900">BunchOfBananas</span>
           </Link>
         </div>
