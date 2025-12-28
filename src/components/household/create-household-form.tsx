@@ -61,7 +61,7 @@ export function CreateHouseholdForm({ userId }: CreateHouseholdFormProps) {
               />
             </div>
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
+              <div role="alert" className="text-sm text-red-700 bg-red-50 p-3 rounded-md">
                 {error}
               </div>
             )}

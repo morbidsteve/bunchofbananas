@@ -1,9 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rate-limit'
 
 // POST: Upload recipe image to storage
 // OCR processing will be done client-side with Tesseract.js
 export async function POST(request: NextRequest) {
+  // Rate limiting for expensive image upload operations
+  const clientIP = getClientIP(request.headers)
+  const rateLimit = checkRateLimit(`ocr:${clientIP}`, RATE_LIMITS.expensive)
+
+  if (!rateLimit.success) {
+    return NextResponse.json(
+      { error: 'Too many uploads. Please try again later.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.ceil((rateLimit.resetTime - Date.now()) / 1000)),
+        },
+      }
+    )
+  }
+
   const supabase = await createClient()
   const {
     data: { user },

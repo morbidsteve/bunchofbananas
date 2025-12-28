@@ -465,7 +465,7 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" aria-label={`Options for ${shelf.name}`}>
                           ⋮
                         </Button>
                       </DropdownMenuTrigger>

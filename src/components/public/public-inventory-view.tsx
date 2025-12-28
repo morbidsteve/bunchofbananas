@@ -569,7 +569,7 @@ export function PublicInventoryView({
             </CardHeader>
             <CardContent>
               {recipeError && (
-                <p className="text-red-500 text-sm mb-4">{recipeError}</p>
+                <p role="alert" className="text-red-700 text-sm mb-4">{recipeError}</p>
               )}
 
               {recipes.length === 0 && !loadingRecipes && !recipeError && (

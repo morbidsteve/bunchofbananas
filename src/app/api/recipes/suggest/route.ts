@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rate-limit'
 
 // Recipe suggestion API using TheMealDB + user recipes
 // Returns multiple recipes with full details and ingredient matching
@@ -25,6 +26,7 @@ interface RecipeIngredient {
 interface Recipe {
   id: string
   title: string
+  description: string
   image: string | null
   url: string | null
   youtubeUrl: string | null
@@ -37,7 +39,105 @@ interface Recipe {
   matchPercentage: number
   isUserRecipe?: boolean
   shareToken?: string
+  source?: string
 }
+
+// Category-specific adjectives for more varied descriptions
+const CATEGORY_DESCRIPTORS: Record<string, string[]> = {
+  'Beef': ['hearty', 'savory', 'rich', 'satisfying'],
+  'Chicken': ['tender', 'flavorful', 'succulent', 'classic'],
+  'Dessert': ['sweet', 'indulgent', 'delightful', 'heavenly'],
+  'Lamb': ['succulent', 'aromatic', 'traditional', 'rich'],
+  'Miscellaneous': ['unique', 'creative', 'versatile', 'special'],
+  'Pasta': ['comforting', 'Italian-inspired', 'hearty', 'satisfying'],
+  'Pork': ['savory', 'tender', 'flavorful', 'hearty'],
+  'Seafood': ['fresh', 'light', 'ocean-inspired', 'delicate'],
+  'Side': ['complementary', 'simple', 'fresh', 'quick'],
+  'Starter': ['appetizing', 'light', 'perfect', 'elegant'],
+  'Vegan': ['plant-based', 'healthy', 'fresh', 'wholesome'],
+  'Vegetarian': ['meatless', 'nutritious', 'garden-fresh', 'vibrant'],
+  'Breakfast': ['morning', 'energizing', 'classic', 'satisfying'],
+  'Goat': ['distinctive', 'tender', 'traditional', 'flavorful'],
+}
+
+// Area-specific cuisine descriptions
+const AREA_DESCRIPTORS: Record<string, string> = {
+  'American': 'classic American cuisine',
+  'British': 'traditional British fare',
+  'Canadian': 'hearty Canadian cooking',
+  'Chinese': 'authentic Chinese flavors',
+  'Croatian': 'Mediterranean-influenced Croatian cuisine',
+  'Dutch': 'traditional Dutch cooking',
+  'Egyptian': 'aromatic Egyptian cuisine',
+  'Filipino': 'vibrant Filipino flavors',
+  'French': 'refined French gastronomy',
+  'Greek': 'fresh Mediterranean Greek cuisine',
+  'Indian': 'aromatic Indian spices',
+  'Irish': 'hearty Irish comfort food',
+  'Italian': 'classic Italian cooking',
+  'Jamaican': 'bold Jamaican flavors',
+  'Japanese': 'delicate Japanese cuisine',
+  'Kenyan': 'flavorful Kenyan cooking',
+  'Malaysian': 'fusion Malaysian flavors',
+  'Mexican': 'vibrant Mexican cuisine',
+  'Moroccan': 'exotic Moroccan spices',
+  'Polish': 'traditional Polish fare',
+  'Portuguese': 'coastal Portuguese flavors',
+  'Russian': 'hearty Russian cuisine',
+  'Spanish': 'bold Spanish cooking',
+  'Thai': 'aromatic Thai cuisine',
+  'Tunisian': 'spiced Tunisian flavors',
+  'Turkish': 'rich Turkish cuisine',
+  'Vietnamese': 'fresh Vietnamese cooking',
+}
+
+// Generate a description from recipe details
+function generateRecipeDescription(title: string, category: string, area: string, ingredientCount: number): string {
+  // Get a random adjective for the category
+  const adjectives = CATEGORY_DESCRIPTORS[category] || ['delicious', 'tasty', 'wonderful', 'flavorful']
+  const adjective = adjectives[Math.floor(Math.random() * adjectives.length)]
+
+  // Get the cuisine description
+  const cuisineDesc = AREA_DESCRIPTORS[area] || (area ? `${area} cuisine` : '')
+
+  // Build the description
+  const parts: string[] = []
+
+  if (cuisineDesc) {
+    parts.push(`A ${adjective} ${category?.toLowerCase() || 'dish'} featuring ${cuisineDesc}`)
+  } else {
+    parts.push(`A ${adjective} ${category?.toLowerCase() || 'dish'}`)
+  }
+
+  if (ingredientCount > 0 && ingredientCount <= 5) {
+    parts[0] += ', simple to prepare with just a few ingredients.'
+  } else if (ingredientCount > 10) {
+    parts[0] += `, crafted with ${ingredientCount} carefully selected ingredients.`
+  } else if (ingredientCount > 0) {
+    parts[0] += '.'
+  } else {
+    parts[0] += '.'
+  }
+
+  return parts.join(' ')
+}
+
+// TheMealDB category list for browsing
+const MEAL_CATEGORIES = [
+  'Beef', 'Chicken', 'Dessert', 'Lamb', 'Miscellaneous', 'Pasta', 'Pork',
+  'Seafood', 'Side', 'Starter', 'Vegan', 'Vegetarian', 'Breakfast', 'Goat'
+]
+
+// TheMealDB area/cuisine list for variety
+const MEAL_AREAS = [
+  'American', 'British', 'Canadian', 'Chinese', 'Croatian', 'Dutch', 'Egyptian',
+  'Filipino', 'French', 'Greek', 'Indian', 'Irish', 'Italian', 'Jamaican',
+  'Japanese', 'Kenyan', 'Malaysian', 'Mexican', 'Moroccan', 'Polish',
+  'Portuguese', 'Russian', 'Spanish', 'Thai', 'Tunisian', 'Turkish', 'Vietnamese'
+]
+
+// First letters for alphabetic browsing
+const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'.split('')
 
 // Words to remove when normalizing ingredients
 const DESCRIPTORS = [
@@ -260,10 +360,53 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting
+    const clientIP = getClientIP(request.headers)
+    const rateLimit = checkRateLimit(`suggest:${clientIP}`, RATE_LIMITS.recipeSuggest)
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rateLimit.resetTime - Date.now()) / 1000)),
+            'X-RateLimit-Remaining': '0',
+          },
+        }
+      )
+    }
+
+    const supabase = await createClient()
+
+    // Verify user is authenticated
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { ingredients, householdId, page = 0, limit = 8 } = await request.json()
 
+    // Validate input
     if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
       return NextResponse.json({ recipes: [], hasMore: false })
+    }
+
+    // Limit ingredients to prevent abuse (max 200 ingredients)
+    const validIngredients = ingredients.slice(0, 200).map(i => String(i).slice(0, 100))
+
+    // Verify user has access to the household if provided
+    if (householdId) {
+      const { data: membership } = await supabase
+        .from('household_members')
+        .select('household_id')
+        .eq('user_id', user.id)
+        .eq('household_id', householdId)
+        .single()
+
+      if (!membership) {
+        return NextResponse.json({ error: 'Access denied to household' }, { status: 403 })
+      }
     }
 
     const recipes: Recipe[] = []
@@ -272,7 +415,6 @@ export async function POST(request: NextRequest) {
     // Fetch user recipes if householdId is provided
     if (householdId) {
       try {
-        const supabase = await createClient()
         const { data: userRecipes } = await supabase
           .from('user_recipes')
           .select(`
@@ -287,7 +429,7 @@ export async function POST(request: NextRequest) {
               (ing: { name: string; quantity: string | null; unit: string | null }) => ({
                 name: ing.name,
                 measure: ing.quantity ? `${ing.quantity} ${ing.unit || ''}`.trim() : '',
-                inStock: hasIngredient(ing.name, ingredients),
+                inStock: hasIngredient(ing.name, validIngredients),
               })
             )
 
@@ -296,14 +438,18 @@ export async function POST(request: NextRequest) {
 
             // Only include if at least one ingredient matches
             if (matchedCount > 0) {
+              const category = recipe.category || ''
+              const area = recipe.cuisine || ''
+
               recipes.push({
                 id: `user-${recipe.id}`,
                 title: recipe.title,
+                description: recipe.description || generateRecipeDescription(recipe.title, category, area, totalIngredients),
                 image: recipe.image_path || null,
                 url: null,
                 youtubeUrl: null,
-                category: recipe.category || '',
-                area: recipe.cuisine || '',
+                category,
+                area,
                 instructions: recipe.instructions,
                 ingredients: recipeIngredients,
                 matchedCount,
@@ -311,6 +457,7 @@ export async function POST(request: NextRequest) {
                 matchPercentage: totalIngredients > 0 ? Math.round((matchedCount / totalIngredients) * 100) : 0,
                 isUserRecipe: true,
                 shareToken: recipe.share_token,
+                source: 'Your Recipes',
               })
             }
           }
@@ -336,24 +483,29 @@ export async function POST(request: NextRequest) {
         const mealDetail: MealDBMeal = detailData.meals?.[0]
         if (!mealDetail) return
 
-        const recipeIngredients = extractIngredients(mealDetail, ingredients)
+        const recipeIngredients = extractIngredients(mealDetail, validIngredients)
         const matchedCount = recipeIngredients.filter(i => i.inStock).length
         const totalIngredients = recipeIngredients.length
+
+        const category = mealDetail.strCategory || ''
+        const area = mealDetail.strArea || ''
 
         recipes.push({
           id: mealDetail.idMeal,
           title: mealDetail.strMeal,
+          description: generateRecipeDescription(mealDetail.strMeal, category, area, totalIngredients),
           image: mealDetail.strMealThumb,
           url: mealDetail.strSource || `https://www.themealdb.com/meal/${mealId}`,
           youtubeUrl: mealDetail.strYoutube || null,
-          category: mealDetail.strCategory || '',
-          area: mealDetail.strArea || '',
+          category,
+          area,
           instructions: mealDetail.strInstructions || '',
           ingredients: recipeIngredients,
           matchedCount,
           totalIngredients,
           matchPercentage: totalIngredients > 0 ? Math.round((matchedCount / totalIngredients) * 100) : 0,
           isUserRecipe: false,
+          source: 'TheMealDB',
         })
       } catch {
         // Skip this meal if we can't get details
@@ -361,7 +513,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Shuffle ingredients to get different results each time
-    const shuffledIngredients = shuffleArray(ingredients)
+    const shuffledIngredients = shuffleArray(validIngredients)
     const searchIngredients = shuffledIngredients.slice(0, 6)
 
     // Search by ingredients
@@ -391,8 +543,85 @@ export async function POST(request: NextRequest) {
       if (recipes.length >= 30) break
     }
 
+    // Browse by random categories for more variety
+    const shuffledCategories = shuffleArray(MEAL_CATEGORIES)
+    const categoriesToBrowse = shuffledCategories.slice(0, 3)
+
+    for (const category of categoriesToBrowse) {
+      if (recipes.length >= 40) break
+      try {
+        const response = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/filter.php?c=${encodeURIComponent(category)}`
+        )
+        if (!response.ok) continue
+
+        const data = await response.json()
+        const meals: MealDBMeal[] = data.meals || []
+        const shuffledMeals = shuffleArray(meals)
+
+        // Get 2-3 meals from each category
+        for (const meal of shuffledMeals.slice(0, 3)) {
+          await processMeal(meal.idMeal)
+        }
+      } catch {
+        // Skip if category fetch fails
+      }
+    }
+
+    // Browse by random cuisines/areas for geographic diversity
+    const shuffledAreas = shuffleArray(MEAL_AREAS)
+    const areasToBrowse = shuffledAreas.slice(0, 3)
+
+    for (const area of areasToBrowse) {
+      if (recipes.length >= 50) break
+      try {
+        const response = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/filter.php?a=${encodeURIComponent(area)}`
+        )
+        if (!response.ok) continue
+
+        const data = await response.json()
+        const meals: MealDBMeal[] = data.meals || []
+        const shuffledMeals = shuffleArray(meals)
+
+        // Get 2-3 meals from each area
+        for (const meal of shuffledMeals.slice(0, 3)) {
+          await processMeal(meal.idMeal)
+        }
+      } catch {
+        // Skip if area fetch fails
+      }
+    }
+
+    // Browse by random first letters for alphabetic variety
+    const shuffledLetters = shuffleArray(ALPHABET)
+    const lettersToBrowse = shuffledLetters.slice(0, 2)
+
+    for (const letter of lettersToBrowse) {
+      if (recipes.length >= 60) break
+      try {
+        const response = await fetch(
+          `https://www.themealdb.com/api/json/v1/1/search.php?f=${letter}`
+        )
+        if (!response.ok) continue
+
+        const data = await response.json()
+        const meals: MealDBMeal[] = data.meals || []
+        const shuffledMeals = shuffleArray(meals)
+
+        // Get 2-3 meals starting with each letter
+        for (const meal of shuffledMeals.slice(0, 3)) {
+          if (meal.idMeal) {
+            await processMeal(meal.idMeal)
+          }
+        }
+      } catch {
+        // Skip if letter search fails
+      }
+    }
+
     // Add some random recipes for variety (especially good for discovering new meals)
-    const randomCount = Math.max(0, 8 - Math.floor(recipes.length / 4))
+    const randomCount = Math.max(0, 10 - Math.floor(recipes.length / 5))
     for (let i = 0; i < randomCount; i++) {
       try {
         const response = await fetch('https://www.themealdb.com/api/json/v1/1/random.php')
@@ -425,7 +654,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       recipes: paginatedRecipes,
-      searchedIngredients: ingredients,
+      searchedIngredients: validIngredients,
       hasMore,
       total: recipes.length,
     })

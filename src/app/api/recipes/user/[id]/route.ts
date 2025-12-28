@@ -22,8 +22,34 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     .eq('id', id)
     .single()
 
-  if (error) {
+  if (error || !recipe) {
     return NextResponse.json({ error: 'Recipe not found' }, { status: 404 })
+  }
+
+  // Allow access if recipe is public
+  if (recipe.is_public) {
+    return NextResponse.json({ recipe })
+  }
+
+  // For private recipes, require authentication and household membership
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Check if user is in the same household as the recipe
+  const { data: membership } = await supabase
+    .from('household_members')
+    .select('household_id')
+    .eq('user_id', user.id)
+    .eq('household_id', recipe.household_id)
+    .single()
+
+  if (!membership) {
+    return NextResponse.json({ error: 'Not authorized to view this recipe' }, { status: 403 })
   }
 
   return NextResponse.json({ recipe })

@@ -68,8 +68,8 @@ export function DashboardNav({ user, household }: DashboardNavProps) {
             {/* Mobile Menu */}
             <Sheet>
               <SheetTrigger asChild className="md:hidden">
-                <Button variant="ghost" size="sm">
-                  <span className="text-xl">☰</span>
+                <Button variant="ghost" size="sm" aria-label="Open navigation menu">
+                  <span className="text-xl" aria-hidden="true">☰</span>
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64">
@@ -91,7 +91,7 @@ export function DashboardNav({ user, household }: DashboardNavProps) {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full" aria-label="Open user menu">
                   <Avatar className="h-10 w-10">
                     <AvatarFallback className="bg-amber-100 text-amber-700">
                       {initials}

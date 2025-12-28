@@ -747,6 +747,7 @@ Instructions:
                           onClick={() => removeIngredient(ing.id)}
                           disabled={ingredients.length === 1}
                           className="text-red-500"
+                          aria-label={`Remove ingredient ${ing.name || 'unnamed'}`}
                         >
                           X
                         </Button>

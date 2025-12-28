@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rate-limit'
 
 interface InviteEmailRequest {
   email: string
@@ -11,6 +12,22 @@ interface InviteEmailRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting - strict for invite emails to prevent spam
+    const clientIP = getClientIP(request.headers)
+    const rateLimit = checkRateLimit(`invite:${clientIP}`, RATE_LIMITS.invite)
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many invite requests. Please try again later.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rateLimit.resetTime - Date.now()) / 1000)),
+          },
+        }
+      )
+    }
+
     const body: InviteEmailRequest = await request.json()
     const { email, householdName, inviterName, token, role } = body
 

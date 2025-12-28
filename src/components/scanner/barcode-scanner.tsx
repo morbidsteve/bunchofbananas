@@ -108,7 +108,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
             {error ? (
               <div className="text-center py-8">
-                <p className="text-red-500 mb-4">{error}</p>
+                <p className="text-red-700 mb-4" role="alert">{error}</p>
                 <Button variant="outline" onClick={onClose}>
                   Go Back
                 </Button>

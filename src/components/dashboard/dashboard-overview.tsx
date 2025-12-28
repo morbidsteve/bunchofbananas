@@ -66,6 +66,7 @@ interface RecipeIngredient {
 interface Recipe {
   id: string
   title: string
+  description?: string
   image: string | null
   url: string | null
   youtubeUrl: string | null
@@ -78,6 +79,7 @@ interface Recipe {
   matchPercentage: number
   isUserRecipe?: boolean
   shareToken?: string
+  source?: string
 }
 
 interface InventoryItemRef {
@@ -768,7 +770,7 @@ export function DashboardOverview({
 
             {/* Recipe Suggestions */}
             {recipeError && (
-              <p className="text-red-500 text-sm mt-4">{recipeError}</p>
+              <p role="alert" className="text-red-700 text-sm mt-4">{recipeError}</p>
             )}
             {recipes.length > 0 && (
               <div className="mt-4 pt-4 border-t border-orange-200">
@@ -902,7 +904,7 @@ export function DashboardOverview({
 
             {/* Recipe Results */}
             {recipeError && (
-              <p className="text-red-500 text-sm">{recipeError}</p>
+              <p role="alert" className="text-red-700 text-sm">{recipeError}</p>
             )}
             {recipes.length > 0 && (
               <>
@@ -986,8 +988,15 @@ export function DashboardOverview({
                   )}
                 </div>
                 <DialogDescription>
-                  {selectedRecipe.category} {selectedRecipe.category && selectedRecipe.area && '•'} {selectedRecipe.area}
+                  {selectedRecipe.description || (
+                    <>
+                      {selectedRecipe.category} {selectedRecipe.category && selectedRecipe.area && '•'} {selectedRecipe.area}
+                    </>
+                  )}
                 </DialogDescription>
+                {selectedRecipe.source && (
+                  <p className="text-xs text-gray-400 mt-1">Source: {selectedRecipe.source}</p>
+                )}
               </DialogHeader>
 
               <div className="space-y-4">
