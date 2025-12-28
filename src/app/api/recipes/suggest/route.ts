@@ -81,8 +81,12 @@ const SYNONYMS: Record<string, string> = {
 // Normalize ingredient name for matching
 function normalizeIngredient(name: string): string[] {
   const lower = name.toLowerCase()
+  // Remove quantities like "400g", "1 cup", "2 lbs", "1/2", "○400g", etc.
+  const withoutQuantities = lower
+    .replace(/^[○•·\-\s]*\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)?\s*/i, '')
+    .replace(/\b\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)\b/gi, '')
   const descriptorPattern = new RegExp(`\\b(${DESCRIPTORS.join('|')})\\b`, 'g')
-  const cleaned = lower.replace(descriptorPattern, '').replace(/\\s+/g, ' ').trim()
+  const cleaned = withoutQuantities.replace(descriptorPattern, '').replace(/\s+/g, ' ').trim()
 
   const words = cleaned.split(' ').filter(w => w.length > 2)
   const baseIngredient = SYNONYMS[cleaned]
@@ -98,8 +102,12 @@ function normalizeIngredient(name: string): string[] {
 // Get core ingredient (main noun)
 function getCoreIngredient(name: string): string {
   const lower = name.toLowerCase()
+  // Remove quantities like "400g", "1 cup", "○400g", etc.
+  const withoutQuantities = lower
+    .replace(/^[○•·\-\s]*\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)?\s*/i, '')
+    .replace(/\b\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)\b/gi, '')
   const descriptorPattern = new RegExp(`\\b(${DESCRIPTORS.join('|')})\\b`, 'g')
-  const cleaned = lower.replace(descriptorPattern, '').replace(/\s+/g, ' ').trim()
+  const cleaned = withoutQuantities.replace(descriptorPattern, '').replace(/\s+/g, ' ').trim()
   const words = cleaned.split(' ')
   const lastWord = words[words.length - 1]
   return SYNONYMS[lastWord] || SYNONYMS[cleaned] || lastWord

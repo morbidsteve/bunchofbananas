@@ -174,8 +174,12 @@ function isSimilar(a: string, b: string, threshold = 0.8): boolean {
 // Normalize ingredient name for matching
 export function normalizeIngredientName(name: string): string {
   const lower = name.toLowerCase()
+  // Remove quantities like "400g", "1 cup", "2 lbs", "1/2", "○400g", etc.
+  const withoutQuantities = lower
+    .replace(/^[○•·\-\s]*\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)?\s*/i, '')
+    .replace(/\b\d+[\d./]*\s*(g|kg|ml|l|oz|lb|lbs|cup|cups|tbsp|tsp|tablespoon|teaspoon|pound|pounds|ounce|ounces)\b/gi, '')
   const descriptorPattern = new RegExp(`\\b(${DESCRIPTORS.join('|')})\\b`, 'g')
-  return lower.replace(descriptorPattern, '').replace(/\s+/g, ' ').trim()
+  return withoutQuantities.replace(descriptorPattern, '').replace(/\s+/g, ' ').trim()
 }
 
 // Get core ingredient (main noun, with synonym resolution)
