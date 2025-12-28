@@ -21,7 +21,7 @@ export default async function ItemsPage() {
 
   const householdId = membership.household_id
 
-  // Get all items with their inventory entries
+  // Get all items with their inventory entries and nutrition info
   const { data: items } = await supabase
     .from('items')
     .select(`
@@ -31,6 +31,14 @@ export default async function ItemsPage() {
       default_unit,
       barcode,
       created_at,
+      calories,
+      protein_g,
+      carbs_g,
+      fat_g,
+      fiber_g,
+      sugar_g,
+      sodium_mg,
+      nutriscore,
       inventory (
         id,
         quantity,

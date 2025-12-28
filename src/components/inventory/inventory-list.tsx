@@ -155,6 +155,18 @@ export function InventoryList({
     price: '',
   })
 
+  // Manual nutrition input
+  const [showNutritionFields, setShowNutritionFields] = useState(false)
+  const [manualNutrition, setManualNutrition] = useState({
+    calories: '',
+    protein_g: '',
+    carbs_g: '',
+    fat_g: '',
+    fiber_g: '',
+    sugar_g: '',
+    sodium_mg: '',
+  })
+
   const [isNewItem, setIsNewItem] = useState(false)
 
   const filteredInventory = inventory.filter((inv) => {
@@ -188,6 +200,26 @@ export function InventoryList({
 
     // Create new item if needed
     if (isNewItem && formData.newItemName) {
+      // Use scanned nutrition if available, otherwise use manual input
+      const nutritionData = scannedNutrition ? {
+        calories: scannedNutrition.calories,
+        protein_g: scannedNutrition.protein_g,
+        carbs_g: scannedNutrition.carbs_g,
+        fat_g: scannedNutrition.fat_g,
+        fiber_g: scannedNutrition.fiber_g,
+        sugar_g: scannedNutrition.sugar_g,
+        sodium_mg: scannedNutrition.sodium_mg,
+        nutriscore: scannedNutrition.nutriscore,
+      } : (showNutritionFields ? {
+        calories: manualNutrition.calories ? parseFloat(manualNutrition.calories) : null,
+        protein_g: manualNutrition.protein_g ? parseFloat(manualNutrition.protein_g) : null,
+        carbs_g: manualNutrition.carbs_g ? parseFloat(manualNutrition.carbs_g) : null,
+        fat_g: manualNutrition.fat_g ? parseFloat(manualNutrition.fat_g) : null,
+        fiber_g: manualNutrition.fiber_g ? parseFloat(manualNutrition.fiber_g) : null,
+        sugar_g: manualNutrition.sugar_g ? parseFloat(manualNutrition.sugar_g) : null,
+        sodium_mg: manualNutrition.sodium_mg ? parseFloat(manualNutrition.sodium_mg) : null,
+      } : null)
+
       const { data: newItem, error: itemError } = await supabase
         .from('items')
         .insert({
@@ -196,17 +228,7 @@ export function InventoryList({
           category: formData.newItemCategory || null,
           default_unit: formData.unit,
           barcode: scannedBarcode || null,
-          // Include nutrition data if from barcode scan
-          ...(scannedNutrition && {
-            calories: scannedNutrition.calories,
-            protein_g: scannedNutrition.protein_g,
-            carbs_g: scannedNutrition.carbs_g,
-            fat_g: scannedNutrition.fat_g,
-            fiber_g: scannedNutrition.fiber_g,
-            sugar_g: scannedNutrition.sugar_g,
-            sodium_mg: scannedNutrition.sodium_mg,
-            nutriscore: scannedNutrition.nutriscore,
-          }),
+          ...(nutritionData && nutritionData),
         })
         .select()
         .single()
@@ -280,6 +302,8 @@ export function InventoryList({
         setIsNewItem(false)
         setScannedBarcode('')
         setScannedNutrition(null)
+        setShowNutritionFields(false)
+        setManualNutrition({ calories: '', protein_g: '', carbs_g: '', fat_g: '', fiber_g: '', sugar_g: '', sodium_mg: '' })
       } else {
         setDialogOpen(false)
         setFormData({
@@ -297,6 +321,8 @@ export function InventoryList({
         setIsNewItem(false)
         setScannedBarcode('')
         setScannedNutrition(null)
+        setShowNutritionFields(false)
+        setManualNutrition({ calories: '', protein_g: '', carbs_g: '', fat_g: '', fiber_g: '', sugar_g: '', sodium_mg: '' })
       }
       router.refresh()
     } else {
@@ -647,6 +673,116 @@ export function InventoryList({
                       {scannedNutrition.nutriscore && (
                         <div className="mt-2">
                           <Badge className="bg-green-600">Nutri-Score: {scannedNutrition.nutriscore}</Badge>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Manual nutrition input (when not from barcode) */}
+                  {!scannedNutrition && (
+                    <div className="space-y-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-gray-500 p-0 h-auto"
+                        onClick={() => setShowNutritionFields(!showNutritionFields)}
+                      >
+                        {showNutritionFields ? '− Hide' : '+ Add'} Nutrition Info (optional)
+                      </Button>
+                      {showNutritionFields && (
+                        <div className="p-3 bg-gray-50 rounded-lg border space-y-3">
+                          <p className="text-xs text-gray-500">Per 100g serving</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label htmlFor="calories" className="text-xs">Calories</Label>
+                              <Input
+                                id="calories"
+                                type="number"
+                                min="0"
+                                placeholder="0"
+                                value={manualNutrition.calories}
+                                onChange={(e) => setManualNutrition({ ...manualNutrition, calories: e.target.value })}
+                                className="h-8"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="protein" className="text-xs">Protein (g)</Label>
+                              <Input
+                                id="protein"
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                placeholder="0"
+                                value={manualNutrition.protein_g}
+                                onChange={(e) => setManualNutrition({ ...manualNutrition, protein_g: e.target.value })}
+                                className="h-8"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="carbs" className="text-xs">Carbs (g)</Label>
+                              <Input
+                                id="carbs"
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                placeholder="0"
+                                value={manualNutrition.carbs_g}
+                                onChange={(e) => setManualNutrition({ ...manualNutrition, carbs_g: e.target.value })}
+                                className="h-8"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="fat" className="text-xs">Fat (g)</Label>
+                              <Input
+                                id="fat"
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                placeholder="0"
+                                value={manualNutrition.fat_g}
+                                onChange={(e) => setManualNutrition({ ...manualNutrition, fat_g: e.target.value })}
+                                className="h-8"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="sugar" className="text-xs">Sugar (g)</Label>
+                              <Input
+                                id="sugar"
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                placeholder="0"
+                                value={manualNutrition.sugar_g}
+                                onChange={(e) => setManualNutrition({ ...manualNutrition, sugar_g: e.target.value })}
+                                className="h-8"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="fiber" className="text-xs">Fiber (g)</Label>
+                              <Input
+                                id="fiber"
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                placeholder="0"
+                                value={manualNutrition.fiber_g}
+                                onChange={(e) => setManualNutrition({ ...manualNutrition, fiber_g: e.target.value })}
+                                className="h-8"
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="sodium" className="text-xs">Sodium (mg)</Label>
+                            <Input
+                              id="sodium"
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={manualNutrition.sodium_mg}
+                              onChange={(e) => setManualNutrition({ ...manualNutrition, sodium_mg: e.target.value })}
+                              className="h-8"
+                            />
+                          </div>
                         </div>
                       )}
                     </div>

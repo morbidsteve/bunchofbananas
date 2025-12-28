@@ -41,6 +41,14 @@ interface ItemWithInventory {
   default_unit: string | null
   barcode: string | null
   created_at: string
+  calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
+  fiber_g: number | null
+  sugar_g: number | null
+  sodium_mg: number | null
+  nutriscore: string | null
   inventory: InventoryEntry[]
 }
 
@@ -304,6 +312,21 @@ export function ItemsManager({
                           Default unit: {item.default_unit || 'count'}
                           {item.barcode && ` • Barcode: ${item.barcode}`}
                         </div>
+                        {/* Nutrition info */}
+                        {item.calories != null && (
+                          <div className="mt-2 flex items-center gap-3 text-xs text-gray-500 flex-wrap">
+                            <span className="font-medium text-gray-600">Nutrition:</span>
+                            <span>{item.calories} cal</span>
+                            {item.protein_g != null && <span>{item.protein_g}g protein</span>}
+                            {item.carbs_g != null && <span>{item.carbs_g}g carbs</span>}
+                            {item.fat_g != null && <span>{item.fat_g}g fat</span>}
+                            {item.nutriscore && (
+                              <Badge className="bg-green-600 text-xs h-5">
+                                Nutri-Score: {item.nutriscore}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Button
