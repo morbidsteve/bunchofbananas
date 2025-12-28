@@ -196,6 +196,17 @@ export function InventoryList({
           category: formData.newItemCategory || null,
           default_unit: formData.unit,
           barcode: scannedBarcode || null,
+          // Include nutrition data if from barcode scan
+          ...(scannedNutrition && {
+            calories: scannedNutrition.calories,
+            protein_g: scannedNutrition.protein_g,
+            carbs_g: scannedNutrition.carbs_g,
+            fat_g: scannedNutrition.fat_g,
+            fiber_g: scannedNutrition.fiber_g,
+            sugar_g: scannedNutrition.sugar_g,
+            sodium_mg: scannedNutrition.sodium_mg,
+            nutriscore: scannedNutrition.nutriscore,
+          }),
         })
         .select()
         .single()
@@ -268,6 +279,7 @@ export function InventoryList({
         })
         setIsNewItem(false)
         setScannedBarcode('')
+        setScannedNutrition(null)
       } else {
         setDialogOpen(false)
         setFormData({
@@ -284,6 +296,7 @@ export function InventoryList({
         })
         setIsNewItem(false)
         setScannedBarcode('')
+        setScannedNutrition(null)
       }
       router.refresh()
     } else {
@@ -619,6 +632,25 @@ export function InventoryList({
                       placeholder="Dairy, Produce, etc."
                     />
                   </div>
+                  {/* Show nutrition info if scanned from barcode */}
+                  {scannedNutrition && scannedNutrition.calories != null && (
+                    <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                      <p className="text-sm font-medium text-green-800 mb-2">Nutrition Info (per 100g)</p>
+                      <div className="grid grid-cols-3 gap-2 text-xs text-green-700">
+                        <div>Calories: {scannedNutrition.calories}</div>
+                        <div>Protein: {scannedNutrition.protein_g ?? '-'}g</div>
+                        <div>Carbs: {scannedNutrition.carbs_g ?? '-'}g</div>
+                        <div>Fat: {scannedNutrition.fat_g ?? '-'}g</div>
+                        <div>Sugar: {scannedNutrition.sugar_g ?? '-'}g</div>
+                        <div>Fiber: {scannedNutrition.fiber_g ?? '-'}g</div>
+                      </div>
+                      {scannedNutrition.nutriscore && (
+                        <div className="mt-2">
+                          <Badge className="bg-green-600">Nutri-Score: {scannedNutrition.nutriscore}</Badge>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="space-y-2">
