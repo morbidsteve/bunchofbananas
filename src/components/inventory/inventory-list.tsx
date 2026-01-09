@@ -1452,7 +1452,7 @@ export function InventoryList({
         </div>
       ) : (
         /* Regular list for small inventories */
-        <div className="space-y-2 max-w-4xl">
+        <div className="space-y-2">
           {filteredInventory.map((inv) => {
             const isDepleted = inv.quantity === 0
             const isUpdating = updatingId === inv.id
@@ -1466,140 +1466,50 @@ export function InventoryList({
                   inv.priority === 'use_soon' ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/30' : ''
                 }`}
               >
-                <CardContent className="py-3 px-3">
-                  {/* Mobile Layout */}
-                  <div className="flex flex-col gap-2 sm:hidden">
-                    <div className="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(inv.id)}
-                        onChange={() => toggleItemSelection(inv.id)}
-                        className="h-4 w-4 mt-1 rounded border-gray-300 dark:border-gray-600 text-amber-600 focus:ring-amber-500 flex-shrink-0"
-                        aria-label={`Select ${inv.items?.name}`}
-                      />
-                      <div className="text-xl flex-shrink-0" aria-hidden="true">
-                        {typeIcons[inv.shelves?.storage_units?.type || 'other']}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{inv.items?.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {inv.shelves?.storage_units?.name} → {inv.shelves?.name}
-                        </div>
-                        <div className="flex items-center gap-1 mt-1 flex-wrap">
-                          {inv.items?.id && bestPrices[inv.items.id] && (
-                            <Badge className="bg-green-600 text-xs">
-                              ${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}
-                            </Badge>
-                          )}
-                          {inv.priority === 'urgent' && <Badge className="bg-red-500 text-xs">Urgent</Badge>}
-                          {inv.priority === 'use_soon' && <Badge className="bg-orange-500 text-xs">Use Soon</Badge>}
-                          {getExpirationBadge(inv.expiration_date)}
-                          {isDepleted && <Badge variant="secondary" className="text-xs">Depleted</Badge>}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Mobile quantity controls */}
-                    <div className="flex items-center justify-between pl-7">
-                      <div className="flex items-center gap-1">
-                        {!isDepleted && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openPriorityDialog(inv)}
-                            className={`h-7 w-7 p-0 ${hasPriority ? 'text-orange-600' : 'text-gray-400'}`}
-                          >
-                            ⚡
-                          </Button>
-                        )}
-                        {isDepleted ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleRestockItem(inv)}
-                            disabled={isUpdating}
-                            className="bg-green-50 text-green-700 border-green-200 h-7 text-xs"
-                          >
-                            Restock
-                          </Button>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleQuantityChange(inv, -1)} disabled={isUpdating}>-</Button>
-                            <div className="w-10 text-center text-sm font-medium">{inv.quantity}</div>
-                            <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleQuantityChange(inv, 1)} disabled={isUpdating}>+</Button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-500" onClick={() => openEditDialog(inv)}>✏️</Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => handleRemoveItem(inv)}>🗑️</Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Desktop Layout - Grid based for consistent columns */}
-                  <div className="hidden sm:grid sm:grid-cols-[auto_auto_1fr_auto] sm:items-center gap-3">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-3">
+                    {/* Checkbox */}
                     <input
                       type="checkbox"
                       checked={selectedIds.has(inv.id)}
                       onChange={() => toggleItemSelection(inv.id)}
-                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-amber-600 focus:ring-amber-500"
-                      aria-label={`Select ${inv.items?.name}`}
+                      className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 shrink-0"
                     />
-                    <div className="text-xl" aria-hidden="true">
-                      {typeIcons[inv.shelves?.storage_units?.type || 'other']}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{inv.items?.name}</span>
-                        <span className="text-xs text-gray-400 truncate hidden md:inline">
-                          {inv.shelves?.storage_units?.name} → {inv.shelves?.name}
-                        </span>
+
+                    {/* Icon */}
+                    <span className="text-lg shrink-0">{typeIcons[inv.shelves?.storage_units?.type || 'other']}</span>
+
+                    {/* Item info - grows to fill space */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{inv.items?.name}</span>
                         {inv.items?.id && bestPrices[inv.items.id] && (
-                          <Badge className="bg-green-600 text-xs shrink-0">
-                            ${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}
-                          </Badge>
+                          <Badge className="bg-green-600 text-xs">${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}</Badge>
                         )}
-                        {inv.priority === 'urgent' && <Badge className="bg-red-500 text-xs shrink-0">Urgent</Badge>}
-                        {inv.priority === 'use_soon' && <Badge className="bg-orange-500 text-xs shrink-0">Use Soon</Badge>}
+                        {inv.priority === 'urgent' && <Badge className="bg-red-500 text-xs">Urgent</Badge>}
+                        {inv.priority === 'use_soon' && <Badge className="bg-orange-500 text-xs">Use Soon</Badge>}
                         {getExpirationBadge(inv.expiration_date)}
-                        {isDepleted && <Badge variant="secondary" className="text-xs shrink-0">Depleted</Badge>}
+                        {isDepleted && <Badge variant="secondary" className="text-xs">Depleted</Badge>}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 md:hidden truncate">
-                        {inv.shelves?.storage_units?.name} → {inv.shelves?.name}
-                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{inv.shelves?.storage_units?.name} → {inv.shelves?.name}</div>
                     </div>
 
-                    {/* Controls - always right aligned */}
-                    <div className="flex items-center gap-1">
+                    {/* Controls - fixed on right */}
+                    <div className="flex items-center gap-1 shrink-0">
                       {!isDepleted && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openPriorityDialog(inv)}
-                          className={`h-7 w-7 p-0 ${hasPriority ? 'text-orange-600' : 'text-gray-300'}`}
-                        >
-                          ⚡
-                        </Button>
+                        <button onClick={() => openPriorityDialog(inv)} className={`p-1 rounded ${hasPriority ? 'text-orange-500' : 'text-gray-300 hover:text-gray-500'}`}>⚡</button>
                       )}
                       {isDepleted ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRestockItem(inv)}
-                          disabled={isUpdating}
-                          className="bg-green-50 text-green-700 border-green-200 h-7 text-xs px-2"
-                        >
-                          Restock
-                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleRestockItem(inv)} disabled={isUpdating} className="h-7 text-xs bg-green-50 text-green-700 border-green-200">Restock</Button>
                       ) : (
                         <>
-                          <Button variant="outline" size="icon" className="h-7 w-7 text-sm" onClick={() => handleQuantityChange(inv, -1)} disabled={isUpdating}>-</Button>
-                          <div className="w-10 text-center text-sm font-medium">{inv.quantity}</div>
-                          <Button variant="outline" size="icon" className="h-7 w-7 text-sm" onClick={() => handleQuantityChange(inv, 1)} disabled={isUpdating}>+</Button>
+                          <Button size="sm" variant="outline" onClick={() => handleQuantityChange(inv, -1)} disabled={isUpdating} className="h-7 w-7 p-0">-</Button>
+                          <span className="w-8 text-center text-sm font-medium">{inv.quantity}</span>
+                          <Button size="sm" variant="outline" onClick={() => handleQuantityChange(inv, 1)} disabled={isUpdating} className="h-7 w-7 p-0">+</Button>
                         </>
                       )}
-                      <Button variant="ghost" size="sm" className="text-gray-500 h-7 px-2 text-xs" onClick={() => openEditDialog(inv)}>Edit</Button>
-                      <Button variant="ghost" size="sm" className="text-red-500 h-7 px-2 text-xs" onClick={() => handleRemoveItem(inv)}>✕</Button>
+                      <button onClick={() => openEditDialog(inv)} className="p-1 text-gray-400 hover:text-gray-600 text-xs">Edit</button>
+                      <button onClick={() => handleRemoveItem(inv)} className="p-1 text-red-400 hover:text-red-600">✕</button>
                     </div>
                   </div>
                 </CardContent>
