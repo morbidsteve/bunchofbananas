@@ -396,8 +396,8 @@ export function DashboardOverview({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Welcome to {householdName}</h1>
-          <p className="text-gray-600 mt-1">Here&apos;s an overview of your home inventory</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Welcome to {householdName}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Here&apos;s an overview of your home inventory</p>
         </div>
         {hasShelves && (
           <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
@@ -588,25 +588,25 @@ export function DashboardOverview({
         <Card>
           <CardContent className="pt-6">
             <div className="text-3xl font-bold text-amber-600">{storageCount}</div>
-            <p className="text-sm text-gray-600">Storage Units</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Storage Units</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-3xl font-bold text-amber-600">{inventoryCount}</div>
-            <p className="text-sm text-gray-600">Items Tracked</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Items Tracked</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-3xl font-bold text-red-500">{expiringItems.length}</div>
-            <p className="text-sm text-gray-600">Expiring Soon</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Expiring Soon</p>
           </CardContent>
         </Card>
-        <Card className={depletedItems.length > 0 ? 'border-amber-300 bg-amber-50' : ''}>
+        <Card className={depletedItems.length > 0 ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/30 dark:border-amber-700' : ''}>
           <CardContent className="pt-6">
             <div className="text-3xl font-bold text-amber-600">{depletedItems.length}</div>
-            <p className="text-sm text-gray-600">Need to Restock</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Need to Restock</p>
           </CardContent>
         </Card>
       </div>
@@ -687,8 +687,8 @@ export function DashboardOverview({
                   className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-100"
                 >
                   <div>
-                    <p className="font-medium">{item.items?.name}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{item.items?.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       Was in {item.shelves?.storage_units?.name} - {item.shelves?.name}
                     </p>
                     {item.items?.category && (
@@ -732,11 +732,11 @@ export function DashboardOverview({
               {expiringItems.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
                 >
                   <div>
-                    <p className="font-medium">{item.items?.name}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{item.items?.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       {item.quantity} {item.unit} in {item.shelves?.storage_units?.name} - {item.shelves?.name}
                     </p>
                   </div>
@@ -943,7 +943,7 @@ export function DashboardOverview({
 
             {/* Item Selector */}
             {showItemSelector && (
-              <div className="border rounded-lg p-4 bg-gray-50">
+              <div className="border dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-medium">Select ingredients to use:</p>
                   {selectedItems.size > 0 && (
@@ -1001,7 +1001,7 @@ export function DashboardOverview({
                     <button
                       key={recipe.id}
                       type="button"
-                      className="bg-gray-50 border rounded-lg overflow-hidden hover:bg-gray-100 transition-colors cursor-pointer text-left w-full focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg overflow-hidden hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer text-left w-full focus:outline-none focus:ring-2 focus:ring-amber-500"
                       onClick={() => setSelectedRecipe(recipe)}
                     >
                       <div className="flex">
@@ -1017,15 +1017,15 @@ export function DashboardOverview({
                           </div>
                         )}
                         {!recipe.image && recipe.isUserRecipe && (
-                          <div className="w-24 h-24 flex-shrink-0 bg-amber-100 flex items-center justify-center text-3xl">
+                          <div className="w-24 h-24 flex-shrink-0 bg-amber-100 dark:bg-amber-900 flex items-center justify-center text-3xl">
                             📖
                           </div>
                         )}
                         <div className="p-3 flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium truncate">{recipe.title}</p>
+                            <p className="font-medium truncate text-gray-900 dark:text-gray-100">{recipe.title}</p>
                             {recipe.isUserRecipe && (
-                              <Badge variant="outline" className="text-xs bg-amber-50 border-amber-300">
+                              <Badge variant="outline" className="text-xs bg-amber-50 dark:bg-amber-900/50 border-amber-300 dark:border-amber-700">
                                 My Recipe
                               </Badge>
                             )}
@@ -1035,7 +1035,7 @@ export function DashboardOverview({
                               {recipe.matchedCount}/{recipe.totalIngredients} ingredients
                             </Badge>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             {recipe.category} {recipe.category && recipe.area && '•'} {recipe.area}
                           </p>
                         </div>

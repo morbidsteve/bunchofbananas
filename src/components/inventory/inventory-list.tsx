@@ -701,8 +701,8 @@ export function InventoryList({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
-          <p className="text-gray-600 mt-1">All items across your storage</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Inventory</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">All items across your storage</p>
         </div>
         <div className="flex gap-2">
           <Tooltip>
@@ -1283,9 +1283,9 @@ export function InventoryList({
                   className="pb-3"
                 >
                   <Card
-                    className={`h-full ${isDepleted ? 'opacity-60 bg-gray-50' : ''} ${
-                      inv.priority === 'urgent' ? 'border-red-300 bg-red-50' :
-                      inv.priority === 'use_soon' ? 'border-orange-300 bg-orange-50' : ''
+                    className={`h-full ${isDepleted ? 'opacity-60 bg-gray-50 dark:bg-gray-800' : ''} ${
+                      inv.priority === 'urgent' ? 'border-red-300 bg-red-50 dark:bg-red-900/30' :
+                      inv.priority === 'use_soon' ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/30' : ''
                     }`}
                   >
                     <CardContent className="py-4">
@@ -1295,15 +1295,15 @@ export function InventoryList({
                             type="checkbox"
                             checked={selectedIds.has(inv.id)}
                             onChange={() => toggleItemSelection(inv.id)}
-                            className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
+                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-amber-600 focus:ring-amber-500 flex-shrink-0"
                             aria-label={`Select ${inv.items?.name}`}
                           />
                           <div className="text-2xl flex-shrink-0" aria-hidden="true">
                             {typeIcons[inv.shelves?.storage_units?.type || 'other']}
                           </div>
                           <div className="min-w-0">
-                            <div className="font-medium truncate">{inv.items?.name}</div>
-                            <div className="text-sm text-gray-500">
+                            <div className="font-medium truncate text-gray-900 dark:text-gray-100">{inv.items?.name}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400">
                               {inv.shelves?.storage_units?.name} - {inv.shelves?.name}
                             </div>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -1461,9 +1461,9 @@ export function InventoryList({
             return (
               <Card
                 key={inv.id}
-                className={`${isDepleted ? 'opacity-60 bg-gray-50' : ''} ${
-                  inv.priority === 'urgent' ? 'border-red-300 bg-red-50' :
-                  inv.priority === 'use_soon' ? 'border-orange-300 bg-orange-50' : ''
+                className={`${isDepleted ? 'opacity-60 bg-gray-50 dark:bg-gray-800' : ''} ${
+                  inv.priority === 'urgent' ? 'border-red-300 bg-red-50 dark:bg-red-900/30' :
+                  inv.priority === 'use_soon' ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/30' : ''
                 }`}
               >
                 <CardContent className="py-3 px-3 sm:py-4 sm:px-4">
@@ -1473,15 +1473,15 @@ export function InventoryList({
                         type="checkbox"
                         checked={selectedIds.has(inv.id)}
                         onChange={() => toggleItemSelection(inv.id)}
-                        className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
+                        className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-amber-600 focus:ring-amber-500 flex-shrink-0"
                         aria-label={`Select ${inv.items?.name}`}
                       />
                       <div className="text-xl sm:text-2xl flex-shrink-0" aria-hidden="true">
                         {typeIcons[inv.shelves?.storage_units?.type || 'other']}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium truncate text-sm sm:text-base">{inv.items?.name}</div>
-                        <div className="text-xs sm:text-sm text-gray-500 truncate">
+                        <div className="font-medium truncate text-sm sm:text-base text-gray-900 dark:text-gray-100">{inv.items?.name}</div>
+                        <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">
                           {inv.shelves?.storage_units?.name} - {inv.shelves?.name}
                         </div>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
