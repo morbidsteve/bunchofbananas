@@ -66,11 +66,27 @@ interface StorageUnit {
   shelves: Shelf[]
 }
 
+interface BestPrice {
+  itemId: string
+  pricePerUnit: number
+  displayUnit: string
+  storeName: string
+  storeLocation: string | null
+  originalPrice: number
+  originalQuantity: number
+  originalUnit: string
+  packageSize: number | null
+  packageUnit: string | null
+  onSale: boolean
+  recordedAt: string
+}
+
 interface ItemsManagerProps {
   items: ItemWithInventory[]
   storageUnits: StorageUnit[]
   householdId: string
   userId: string
+  bestPrices?: Record<string, BestPrice>
 }
 
 const typeIcons: Record<string, string> = {
@@ -86,6 +102,7 @@ export function ItemsManager({
   storageUnits,
   householdId,
   userId,
+  bestPrices = {},
 }: ItemsManagerProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -304,6 +321,18 @@ export function ItemsManager({
                           <span className="font-semibold text-lg">{item.name}</span>
                           {item.category && (
                             <Badge variant="outline">{item.category}</Badge>
+                          )}
+                          {bestPrices[item.id] && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge className="bg-green-600 cursor-help">
+                                  ${bestPrices[item.id].pricePerUnit.toFixed(2)}/{bestPrices[item.id].displayUnit}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Best price at {bestPrices[item.id].storeName}
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                           {isOutOfStock && (
                             <Badge variant="secondary">Out of Stock</Badge>

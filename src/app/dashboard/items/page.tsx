@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ItemsManager } from '@/components/items/items-manager'
+import { calculateBestPrices } from '@/lib/price-utils'
 
 export default async function ItemsPage() {
   const supabase = await createClient()
@@ -74,12 +75,40 @@ export default async function ItemsPage() {
     .eq('household_id', householdId)
     .order('name')
 
+  // Get price history for best price calculations
+  const { data: priceHistory } = await supabase
+    .from('price_history')
+    .select(`
+      id,
+      price,
+      quantity,
+      unit,
+      on_sale,
+      recorded_at,
+      package_size,
+      package_unit,
+      item_id,
+      store_id,
+      stores (
+        id,
+        name,
+        location
+      )
+    `)
+    .in('item_id', (items || []).map(i => i.id))
+    .order('recorded_at', { ascending: false })
+
+  // Calculate best prices map
+  const bestPricesMap = calculateBestPrices((priceHistory || []) as any)
+  const bestPrices = Object.fromEntries(bestPricesMap)
+
   return (
     <ItemsManager
       items={(items || []) as any}
       storageUnits={(storageUnits || []) as any}
       householdId={householdId}
       userId={user.id}
+      bestPrices={bestPrices}
     />
   )
 }

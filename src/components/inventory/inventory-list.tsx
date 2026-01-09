@@ -88,6 +88,21 @@ interface Store {
   location: string | null
 }
 
+interface BestPrice {
+  itemId: string
+  pricePerUnit: number
+  displayUnit: string
+  storeName: string
+  storeLocation: string | null
+  originalPrice: number
+  originalQuantity: number
+  originalUnit: string
+  packageSize: number | null
+  packageUnit: string | null
+  onSale: boolean
+  recordedAt: string
+}
+
 interface InventoryListProps {
   inventory: InventoryItem[]
   items: Item[]
@@ -95,6 +110,7 @@ interface InventoryListProps {
   stores: Store[]
   householdId: string
   userId: string
+  bestPrices?: Record<string, BestPrice>
 }
 
 const typeIcons: Record<string, string> = {
@@ -112,6 +128,7 @@ export function InventoryList({
   stores,
   householdId,
   userId,
+  bestPrices = {},
 }: InventoryListProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -175,6 +192,8 @@ export function InventoryList({
     storeId: '',
     newStoreName: '',
     price: '',
+    packageSize: '',
+    packageUnit: '',
   })
 
   // Manual nutrition input
@@ -305,14 +324,20 @@ export function InventoryList({
     if (!error) {
       // Record price history if price was provided
       if (formData.price && storeId) {
-        await supabase.from('price_history').insert({
+        const priceData: Record<string, unknown> = {
           item_id: itemId,
           store_id: storeId,
           price: parseFloat(formData.price),
           quantity: parseFloat(formData.quantity),
           unit: formData.unit,
           recorded_by: userId,
-        })
+        }
+        // Add package size if provided for better price/oz calculations
+        if (formData.packageSize && formData.packageUnit) {
+          priceData.package_size = parseFloat(formData.packageSize)
+          priceData.package_unit = formData.packageUnit
+        }
+        await supabase.from('price_history').insert(priceData)
       }
 
       const itemName = isNewItem ? formData.newItemName : items.find(i => i.id === itemId)?.name
@@ -332,6 +357,8 @@ export function InventoryList({
           storeId: formData.storeId, // Keep store selection
           newStoreName: '',
           price: '',
+          packageSize: '',
+          packageUnit: '',
         })
         setIsNewItem(false)
         setScannedBarcode('')
@@ -351,6 +378,8 @@ export function InventoryList({
           storeId: '',
           newStoreName: '',
           price: '',
+          packageSize: '',
+          packageUnit: '',
         })
         setIsNewItem(false)
         setScannedBarcode('')
@@ -1037,6 +1066,50 @@ export function InventoryList({
                     />
                   </div>
                 </div>
+                {/* Package size for price/oz calculations */}
+                {formData.price && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg border">
+                    <Label className="text-sm text-gray-600 font-normal mb-2 block">
+                      Package Size (for price per oz/unit)
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={formData.packageSize}
+                          onChange={(e) => setFormData({ ...formData, packageSize: e.target.value })}
+                          placeholder="e.g., 16"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Select
+                          value={formData.packageUnit}
+                          onValueChange={(value) => setFormData({ ...formData, packageUnit: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="oz">oz (weight)</SelectItem>
+                            <SelectItem value="lb">lb</SelectItem>
+                            <SelectItem value="g">grams</SelectItem>
+                            <SelectItem value="kg">kg</SelectItem>
+                            <SelectItem value="fl_oz">fl oz</SelectItem>
+                            <SelectItem value="ml">ml</SelectItem>
+                            <SelectItem value="L">liters</SelectItem>
+                            <SelectItem value="gallon">gallon</SelectItem>
+                            <SelectItem value="count">count</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      e.g., 16 oz bag = $0.31/oz for a $4.99 bag
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Add Another Checkbox */}
@@ -1239,6 +1312,18 @@ export function InventoryList({
                                   {inv.items.category}
                                 </Badge>
                               )}
+                              {inv.items?.id && bestPrices[inv.items.id] && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge className="bg-green-600 cursor-help">
+                                      ${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Best price at {bestPrices[inv.items.id].storeName}
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
                               {inv.priority === 'urgent' && (
                                 <Badge className="bg-red-500">Urgent</Badge>
                               )}
@@ -1381,9 +1466,9 @@ export function InventoryList({
                   inv.priority === 'use_soon' ? 'border-orange-300 bg-orange-50' : ''
                 }`}
               >
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                <CardContent className="py-3 px-3 sm:py-4 sm:px-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(inv.id)}
@@ -1391,12 +1476,12 @@ export function InventoryList({
                         className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 flex-shrink-0"
                         aria-label={`Select ${inv.items?.name}`}
                       />
-                      <div className="text-2xl flex-shrink-0" aria-hidden="true">
+                      <div className="text-xl sm:text-2xl flex-shrink-0" aria-hidden="true">
                         {typeIcons[inv.shelves?.storage_units?.type || 'other']}
                       </div>
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{inv.items?.name}</div>
-                        <div className="text-sm text-gray-500">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium truncate text-sm sm:text-base">{inv.items?.name}</div>
+                        <div className="text-xs sm:text-sm text-gray-500 truncate">
                           {inv.shelves?.storage_units?.name} - {inv.shelves?.name}
                         </div>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -1404,6 +1489,18 @@ export function InventoryList({
                             <Badge variant="outline">
                               {inv.items.category}
                             </Badge>
+                          )}
+                          {inv.items?.id && bestPrices[inv.items.id] && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge className="bg-green-600 cursor-help">
+                                  ${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Best price at {bestPrices[inv.items.id].storeName}
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                           {inv.priority === 'urgent' && (
                             <Badge className="bg-red-500">Urgent</Badge>
@@ -1425,7 +1522,7 @@ export function InventoryList({
                     </div>
 
                     {/* Quantity Controls */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center justify-end gap-1 sm:gap-2 flex-shrink-0 ml-auto sm:ml-0">
                       {!isDepleted && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1433,7 +1530,7 @@ export function InventoryList({
                               variant="ghost"
                               size="sm"
                               onClick={() => openPriorityDialog(inv)}
-                              className={hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-500'}
+                              className={`h-8 w-8 p-0 ${hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-500'}`}
                               aria-label={`Set priority for ${inv.items?.name}`}
                             >
                               ⚡
@@ -1450,7 +1547,7 @@ export function InventoryList({
                               size="sm"
                               onClick={() => handleRestockItem(inv)}
                               disabled={isUpdating}
-                              className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                              className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 text-xs h-8"
                             >
                               {isUpdating ? '...' : 'Restock'}
                             </Button>
@@ -1464,7 +1561,7 @@ export function InventoryList({
                               <Button
                                 variant="outline"
                                 size="icon"
-                                className="h-9 w-9 text-lg font-bold"
+                                className="h-8 w-8 text-base font-bold"
                                 onClick={() => handleQuantityChange(inv, -1)}
                                 disabled={isUpdating}
                                 aria-label={`Decrease quantity of ${inv.items?.name}`}
@@ -1474,8 +1571,8 @@ export function InventoryList({
                             </TooltipTrigger>
                             <TooltipContent>Use one</TooltipContent>
                           </Tooltip>
-                          <div className="w-16 text-center">
-                            <div className="font-semibold">{inv.quantity}</div>
+                          <div className="w-12 sm:w-16 text-center">
+                            <div className="font-semibold text-sm sm:text-base">{inv.quantity}</div>
                             <div className="text-xs text-gray-500">{inv.unit}</div>
                           </div>
                           <Tooltip>
@@ -1483,7 +1580,7 @@ export function InventoryList({
                               <Button
                                 variant="outline"
                                 size="icon"
-                                className="h-9 w-9 text-lg font-bold"
+                                className="h-8 w-8 text-base font-bold"
                                 onClick={() => handleQuantityChange(inv, 1)}
                                 disabled={isUpdating}
                                 aria-label={`Increase quantity of ${inv.items?.name}`}
@@ -1500,10 +1597,11 @@ export function InventoryList({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-gray-600 hover:bg-gray-100"
+                            className="text-gray-600 hover:bg-gray-100 h-8 w-8 p-0 sm:w-auto sm:px-3"
                             onClick={() => openEditDialog(inv)}
                           >
-                            Edit
+                            <span className="hidden sm:inline">Edit</span>
+                            <span className="sm:hidden">✏️</span>
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Edit item details</TooltipContent>
@@ -1513,11 +1611,12 @@ export function InventoryList({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-red-600 hover:bg-red-50"
+                            className="text-red-600 hover:bg-red-50 h-8 w-8 p-0 sm:w-auto sm:px-3"
                             onClick={() => handleRemoveItem(inv)}
                             aria-label={`Remove ${inv.items?.name || 'item'} from inventory`}
                           >
-                            Remove
+                            <span className="hidden sm:inline">Remove</span>
+                            <span className="sm:hidden">🗑️</span>
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Remove from inventory</TooltipContent>

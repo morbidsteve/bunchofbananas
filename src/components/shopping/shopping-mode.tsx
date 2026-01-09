@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 interface InventoryItem {
   id: string
@@ -30,9 +31,25 @@ interface DepletedItem {
   category: string | null
 }
 
+interface BestPrice {
+  itemId: string
+  pricePerUnit: number
+  displayUnit: string
+  storeName: string
+  storeLocation: string | null
+  originalPrice: number
+  originalQuantity: number
+  originalUnit: string
+  packageSize: number | null
+  packageUnit: string | null
+  onSale: boolean
+  recordedAt: string
+}
+
 interface ShoppingModeProps {
   inventory: InventoryItem[]
   depletedItems?: DepletedItem[]
+  bestPrices?: Record<string, BestPrice>
 }
 
 const typeIcons: Record<string, string> = {
@@ -43,7 +60,7 @@ const typeIcons: Record<string, string> = {
   other: '📦',
 }
 
-export function ShoppingMode({ inventory, depletedItems = [] }: ShoppingModeProps) {
+export function ShoppingMode({ inventory, depletedItems = [], bestPrices = {} }: ShoppingModeProps) {
   const [search, setSearch] = useState('')
   const [showRestockList, setShowRestockList] = useState(true)
 
@@ -132,18 +149,32 @@ export function ShoppingMode({ inventory, depletedItems = [] }: ShoppingModeProp
                               <div className="text-lg font-semibold">
                                 {inv.quantity} {inv.unit}
                               </div>
-                              {inv.expiration_date && (
-                                <Badge
-                                  variant={
-                                    new Date(inv.expiration_date) <= new Date()
-                                      ? 'destructive'
-                                      : 'secondary'
-                                  }
-                                  className="text-xs"
-                                >
-                                  Exp: {new Date(inv.expiration_date).toLocaleDateString()}
-                                </Badge>
-                              )}
+                              <div className="flex flex-col items-end gap-1">
+                                {inv.items?.id && bestPrices[inv.items.id] && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge className="bg-green-600 cursor-help text-xs">
+                                        ${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Best at {bestPrices[inv.items.id].storeName}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                                {inv.expiration_date && (
+                                  <Badge
+                                    variant={
+                                      new Date(inv.expiration_date) <= new Date()
+                                        ? 'destructive'
+                                        : 'secondary'
+                                    }
+                                    className="text-xs"
+                                  >
+                                    Exp: {new Date(inv.expiration_date).toLocaleDateString()}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </CardContent>
@@ -208,11 +239,25 @@ export function ShoppingMode({ inventory, depletedItems = [] }: ShoppingModeProp
                         <span className="text-lg" aria-hidden="true">🛒</span>
                         <span className="font-medium">{item.name}</span>
                       </div>
-                      {item.category && (
-                        <Badge variant="outline" className="text-xs">
-                          {item.category}
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {bestPrices[item.id] && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge className="bg-green-600 cursor-help text-xs">
+                                ${bestPrices[item.id].pricePerUnit.toFixed(2)}/{bestPrices[item.id].displayUnit}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Best at {bestPrices[item.id].storeName}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {item.category && (
+                          <Badge variant="outline" className="text-xs">
+                            {item.category}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

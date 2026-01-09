@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { InventoryList } from '@/components/inventory/inventory-list'
+import { calculateBestPrices } from '@/lib/price-utils'
 
 export default async function InventoryPage() {
   const supabase = await createClient()
@@ -82,6 +83,33 @@ export default async function InventoryPage() {
     .eq('household_id', householdId)
     .order('name')
 
+  // Get price history for best price calculations
+  const { data: priceHistory } = await supabase
+    .from('price_history')
+    .select(`
+      id,
+      price,
+      quantity,
+      unit,
+      on_sale,
+      recorded_at,
+      package_size,
+      package_unit,
+      item_id,
+      store_id,
+      stores (
+        id,
+        name,
+        location
+      )
+    `)
+    .in('item_id', (items || []).map(i => i.id))
+    .order('recorded_at', { ascending: false })
+
+  // Calculate best prices map
+  const bestPricesMap = calculateBestPrices((priceHistory || []) as any)
+  const bestPrices = Object.fromEntries(bestPricesMap)
+
   return (
     <InventoryList
       inventory={(inventory || []) as any}
@@ -90,6 +118,7 @@ export default async function InventoryPage() {
       stores={(stores || []) as any}
       householdId={householdId}
       userId={user.id}
+      bestPrices={bestPrices}
     />
   )
 }
