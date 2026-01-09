@@ -34,6 +34,8 @@ interface PriceHistoryItem {
   unit: string
   on_sale: boolean
   recorded_at: string
+  package_size: number | null
+  package_unit: string | null
   items: {
     id: string
     name: string
@@ -75,6 +77,8 @@ export function PriceTracker({
     quantity: '1',
     unit: 'count',
     onSale: false,
+    packageSize: '',
+    packageUnit: '',
   })
 
   const filteredHistory = priceHistory.filter((ph) =>
@@ -113,7 +117,7 @@ export function PriceTracker({
     setLoading(true)
 
     const supabase = createClient()
-    const { error } = await supabase.from('price_history').insert({
+    const insertData: Record<string, unknown> = {
       item_id: priceForm.itemId,
       store_id: priceForm.storeId,
       price: parseFloat(priceForm.price),
@@ -121,7 +125,15 @@ export function PriceTracker({
       unit: priceForm.unit,
       on_sale: priceForm.onSale,
       recorded_by: userId,
-    })
+    }
+
+    // Add optional package size fields if provided
+    if (priceForm.packageSize && priceForm.packageUnit) {
+      insertData.package_size = parseFloat(priceForm.packageSize)
+      insertData.package_unit = priceForm.packageUnit
+    }
+
+    const { error } = await supabase.from('price_history').insert(insertData)
 
     if (!error) {
       setPriceDialogOpen(false)
@@ -132,6 +144,8 @@ export function PriceTracker({
         quantity: '1',
         unit: 'count',
         onSale: false,
+        packageSize: '',
+        packageUnit: '',
       })
       router.refresh()
     }
@@ -154,17 +168,58 @@ export function PriceTracker({
     })
   }
 
+  // Unit conversion helper - converts to base unit for comparison
+  function convertToBaseUnit(value: number, unit: string): { value: number; unit: string } {
+    // Weight conversions (base: oz)
+    if (unit === 'oz') return { value, unit: 'oz' }
+    if (unit === 'lb') return { value: value * 16, unit: 'oz' }
+    if (unit === 'g') return { value: value * 0.035274, unit: 'oz' }
+    if (unit === 'kg') return { value: value * 35.274, unit: 'oz' }
+    // Volume conversions (base: fl_oz)
+    if (unit === 'fl_oz') return { value, unit: 'fl_oz' }
+    if (unit === 'ml') return { value: value * 0.033814, unit: 'fl_oz' }
+    if (unit === 'L' || unit === 'liter') return { value: value * 33.814, unit: 'fl_oz' }
+    if (unit === 'gallon') return { value: value * 128, unit: 'fl_oz' }
+    if (unit === 'quart') return { value: value * 32, unit: 'fl_oz' }
+    if (unit === 'pint') return { value: value * 16, unit: 'fl_oz' }
+    if (unit === 'cup') return { value: value * 8, unit: 'fl_oz' }
+    // Count-based (no conversion)
+    return { value, unit }
+  }
+
+  // Calculate normalized price per unit
+  function calculatePricePerUnit(ph: PriceHistoryItem): { pricePerUnit: number; displayUnit: string } {
+    // If package size is specified, use that for normalization
+    if (ph.package_size && ph.package_unit) {
+      const converted = convertToBaseUnit(ph.package_size, ph.package_unit)
+      return {
+        pricePerUnit: ph.price / converted.value,
+        displayUnit: converted.unit,
+      }
+    }
+    // Fallback to simple quantity calculation
+    return {
+      pricePerUnit: ph.price / ph.quantity,
+      displayUnit: ph.unit,
+    }
+  }
+
   // Group price history by item to show best prices
   const bestPrices = items.map((item) => {
     const itemPrices = priceHistory.filter((ph) => ph.items?.id === item.id)
     if (itemPrices.length === 0) return null
 
-    // Calculate unit price for comparison
-    const pricesWithUnit = itemPrices.map((ph) => ({
-      ...ph,
-      unitPrice: ph.price / ph.quantity,
-    }))
+    // Calculate unit price for comparison, using package size when available
+    const pricesWithUnit = itemPrices.map((ph) => {
+      const { pricePerUnit, displayUnit } = calculatePricePerUnit(ph)
+      return {
+        ...ph,
+        unitPrice: pricePerUnit,
+        displayUnit,
+      }
+    })
 
+    // Find lowest price (only compare items with same base unit)
     const lowest = pricesWithUnit.reduce((min, ph) =>
       ph.unitPrice < min.unitPrice ? ph : min
     )
@@ -335,6 +390,52 @@ export function PriceTracker({
                   <Label htmlFor="onSale" className="font-normal">This is a sale price</Label>
                 </div>
 
+                {/* Optional: Package size for price-per-unit calculations */}
+                <div className="border-t pt-4">
+                  <Label className="text-sm text-gray-500 font-normal mb-2 block">
+                    Package size (optional - for price-per-unit comparison)
+                  </Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="packageSize">Total Size</Label>
+                      <Input
+                        id="packageSize"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={priceForm.packageSize}
+                        onChange={(e) => setPriceForm({ ...priceForm, packageSize: e.target.value })}
+                        placeholder="16"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Size Unit</Label>
+                      <Select
+                        value={priceForm.packageUnit}
+                        onValueChange={(value) => setPriceForm({ ...priceForm, packageUnit: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="oz">oz (weight)</SelectItem>
+                          <SelectItem value="lb">lb</SelectItem>
+                          <SelectItem value="g">grams</SelectItem>
+                          <SelectItem value="kg">kg</SelectItem>
+                          <SelectItem value="fl_oz">fl oz</SelectItem>
+                          <SelectItem value="ml">ml</SelectItem>
+                          <SelectItem value="L">liters</SelectItem>
+                          <SelectItem value="gallon">gallon</SelectItem>
+                          <SelectItem value="count">count</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    e.g., 16 oz bag, 2 lb package, 500 ml bottle
+                  </p>
+                </div>
+
                 <div className="flex gap-2 justify-end">
                   <Button type="button" variant="outline" onClick={() => setPriceDialogOpen(false)}>
                     Cancel
@@ -388,32 +489,44 @@ export function PriceTracker({
             </Card>
           ) : (
             <div className="space-y-3">
-              {filteredHistory.map((ph) => (
-                <Card key={ph.id}>
-                  <CardContent className="py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="text-2xl">🏷️</div>
-                        <div>
-                          <div className="font-medium">{ph.items?.name}</div>
-                          <div className="text-sm text-gray-500">
-                            {ph.stores?.name} {ph.stores?.location && `• ${ph.stores.location}`}
+              {filteredHistory.map((ph) => {
+                const { pricePerUnit, displayUnit } = calculatePricePerUnit(ph)
+                return (
+                  <Card key={ph.id}>
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="text-2xl">🏷️</div>
+                          <div>
+                            <div className="font-medium">{ph.items?.name}</div>
+                            <div className="text-sm text-gray-500">
+                              {ph.stores?.name} {ph.stores?.location && `• ${ph.stores.location}`}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold">{formatPrice(ph.price)}</span>
-                          {ph.on_sale && <Badge variant="destructive">Sale</Badge>}
+                        <div className="text-right">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-semibold">{formatPrice(ph.price)}</span>
+                            {ph.on_sale && <Badge variant="destructive">Sale</Badge>}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {ph.quantity} {ph.unit}
+                            {ph.package_size && ph.package_unit && (
+                              <span> ({ph.package_size} {ph.package_unit})</span>
+                            )}
+                            {' • '}{formatDate(ph.recorded_at)}
+                          </div>
+                          {(ph.package_size && ph.package_unit) && (
+                            <div className="text-xs text-green-600 font-medium">
+                              {formatPrice(pricePerUnit)}/{displayUnit}
+                            </div>
+                          )}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          {ph.quantity} {ph.unit} • {formatDate(ph.recorded_at)}
-                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           )}
         </TabsContent>
@@ -446,10 +559,13 @@ export function PriceTracker({
                       </div>
                       <div className="text-right">
                         <div className="text-lg font-semibold text-green-600">
-                          {formatPrice(bp.lowest.unitPrice)}/{bp.lowest.unit}
+                          {formatPrice(bp.lowest.unitPrice)}/{bp.lowest.displayUnit}
                         </div>
                         <div className="text-sm text-gray-500">
                           {formatPrice(bp.lowest.price)} for {bp.lowest.quantity} {bp.lowest.unit}
+                          {bp.lowest.package_size && bp.lowest.package_unit && (
+                            <span> ({bp.lowest.package_size} {bp.lowest.package_unit})</span>
+                          )}
                         </div>
                       </div>
                     </div>

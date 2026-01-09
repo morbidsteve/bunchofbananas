@@ -25,6 +25,7 @@ interface Member {
   role: 'owner' | 'member'
   created_at: string
   user_id: string
+  email?: string
 }
 
 interface MemberManagementProps {
@@ -171,6 +172,21 @@ export function MemberManagement({
     }
   }
 
+  async function handleChangeRole(memberId: string, newRole: 'owner' | 'member') {
+    const supabase = createClient()
+    const { error } = await supabase.rpc('update_member_role', {
+      p_member_id: memberId,
+      p_new_role: newRole,
+    })
+
+    if (error) {
+      toast.error(error.message || 'Failed to change role')
+    } else {
+      toast.success(`Role updated to ${newRole}`)
+      router.refresh()
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -242,43 +258,62 @@ export function MemberManagement({
       <CardContent className="space-y-4">
         {/* Current Members */}
         <div className="space-y-3">
-          {members.map((member) => (
-            <div
-              key={member.id}
-              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                  <span className="text-amber-700 font-medium">
-                    {member.user_id === currentUserId ? 'You' : '?'}
-                  </span>
+          {members.map((member) => {
+            const memberEmail = member.email || (member.user_id === currentUserId ? currentUserEmail : null)
+            const displayName = memberEmail || 'Household Member'
+            const initials = memberEmail ? memberEmail.charAt(0).toUpperCase() : '?'
+
+            return (
+              <div
+                key={member.id}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                    <span className="text-amber-700 font-medium">
+                      {member.user_id === currentUserId ? 'You' : initials}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-medium">{displayName}</p>
+                    <p className="text-sm text-gray-500">
+                      Joined {new Date(member.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium">
-                    {member.user_id === currentUserId ? currentUserEmail : 'Household Member'}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Joined {new Date(member.created_at).toLocaleDateString()}
-                  </p>
+                <div className="flex items-center gap-2">
+                  {isOwner && member.user_id !== currentUserId ? (
+                    <Select
+                      value={member.role}
+                      onValueChange={(value: 'owner' | 'member') => handleChangeRole(member.id, value)}
+                    >
+                      <SelectTrigger className="w-[110px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="member">Member</SelectItem>
+                        <SelectItem value="owner">Owner</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge variant={member.role === 'owner' ? 'default' : 'secondary'}>
+                      {member.role}
+                    </Badge>
+                  )}
+                  {isOwner && member.user_id !== currentUserId && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:bg-red-50"
+                      onClick={() => handleRemoveMember(member.id)}
+                    >
+                      Remove
+                    </Button>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={member.role === 'owner' ? 'default' : 'secondary'}>
-                  {member.role}
-                </Badge>
-                {isOwner && member.user_id !== currentUserId && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-600 hover:bg-red-50"
-                    onClick={() => handleRemoveMember(member.id)}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Pending Invites */}

@@ -40,16 +40,25 @@ export default async function SettingsPage() {
   const isPublic = householdSharing?.is_public ?? false
   const shareToken = householdSharing?.share_token ?? ''
 
-  // Get all household members
-  const { data: members } = await supabase
-    .from('household_members')
-    .select(`
-      id,
-      role,
-      created_at,
-      user_id
-    `)
-    .eq('household_id', membership.household_id)
+  // Get all household members with emails via secure function
+  const { data: membersWithEmails } = await supabase.rpc('get_household_members_with_emails', {
+    p_household_id: membership.household_id,
+  })
+
+  // Fallback to basic query if function not available yet
+  let members = membersWithEmails
+  if (!members) {
+    const { data: basicMembers } = await supabase
+      .from('household_members')
+      .select(`
+        id,
+        role,
+        created_at,
+        user_id
+      `)
+      .eq('household_id', membership.household_id)
+    members = basicMembers
+  }
 
   // Get pending invites (may fail if migration hasn't run)
   let invites: any[] = []

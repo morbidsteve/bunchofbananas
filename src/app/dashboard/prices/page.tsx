@@ -45,6 +45,8 @@ export default async function PricesPage() {
       unit,
       on_sale,
       recorded_at,
+      package_size,
+      package_unit,
       items!inner (
         id,
         name,
