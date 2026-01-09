@@ -41,13 +41,14 @@ export default async function SettingsPage() {
   const shareToken = householdSharing?.share_token ?? ''
 
   // Get all household members with emails via secure function
-  const { data: membersWithEmails } = await supabase.rpc('get_household_members_with_emails', {
+  const { data: membersWithEmails, error: rpcError } = await supabase.rpc('get_household_members_with_emails', {
     p_household_id: membership.household_id,
   })
 
-  // Fallback to basic query if function not available yet
+  // Fallback to basic query if function not available or errored
   let members = membersWithEmails
-  if (!members) {
+  if (!members || members.length === 0 || rpcError) {
+    console.log('RPC error or empty:', rpcError?.message)
     const { data: basicMembers } = await supabase
       .from('household_members')
       .select(`
