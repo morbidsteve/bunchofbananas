@@ -1536,57 +1536,50 @@ export function InventoryList({
                     </div>
                   </div>
 
-                  {/* Desktop Layout */}
-                  <div className="hidden sm:flex sm:items-center gap-3">
+                  {/* Desktop Layout - Grid based for consistent columns */}
+                  <div className="hidden sm:grid sm:grid-cols-[auto_auto_1fr_auto] sm:items-center gap-3">
                     <input
                       type="checkbox"
                       checked={selectedIds.has(inv.id)}
                       onChange={() => toggleItemSelection(inv.id)}
-                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-amber-600 focus:ring-amber-500 flex-shrink-0"
+                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-amber-600 focus:ring-amber-500"
                       aria-label={`Select ${inv.items?.name}`}
                     />
-                    <div className="text-2xl flex-shrink-0 w-8 text-center" aria-hidden="true">
+                    <div className="text-xl" aria-hidden="true">
                       {typeIcons[inv.shelves?.storage_units?.type || 'other']}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{inv.items?.name}</span>
+                    <div className="min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{inv.items?.name}</span>
+                        <span className="text-xs text-gray-400 truncate hidden md:inline">
+                          {inv.shelves?.storage_units?.name} → {inv.shelves?.name}
+                        </span>
                         {inv.items?.id && bestPrices[inv.items.id] && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge className="bg-green-600 cursor-help text-xs">
-                                ${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent>Best at {bestPrices[inv.items.id].storeName}</TooltipContent>
-                          </Tooltip>
+                          <Badge className="bg-green-600 text-xs shrink-0">
+                            ${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}
+                          </Badge>
                         )}
-                        {inv.priority === 'urgent' && <Badge className="bg-red-500 text-xs">Urgent</Badge>}
-                        {inv.priority === 'use_soon' && <Badge className="bg-orange-500 text-xs">Use Soon</Badge>}
+                        {inv.priority === 'urgent' && <Badge className="bg-red-500 text-xs shrink-0">Urgent</Badge>}
+                        {inv.priority === 'use_soon' && <Badge className="bg-orange-500 text-xs shrink-0">Use Soon</Badge>}
                         {getExpirationBadge(inv.expiration_date)}
-                        {isDepleted && <Badge variant="secondary" className="text-xs">Depleted</Badge>}
+                        {isDepleted && <Badge variant="secondary" className="text-xs shrink-0">Depleted</Badge>}
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 md:hidden truncate">
                         {inv.shelves?.storage_units?.name} → {inv.shelves?.name}
                       </div>
                     </div>
 
-                    {/* Desktop controls */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Controls - always right aligned */}
+                    <div className="flex items-center gap-1">
                       {!isDepleted && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openPriorityDialog(inv)}
-                              className={`h-8 w-8 p-0 ${hasPriority ? 'text-orange-600 hover:bg-orange-100' : 'text-gray-400'}`}
-                            >
-                              ⚡
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Set priority</TooltipContent>
-                        </Tooltip>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openPriorityDialog(inv)}
+                          className={`h-7 w-7 p-0 ${hasPriority ? 'text-orange-600' : 'text-gray-300'}`}
+                        >
+                          ⚡
+                        </Button>
                       )}
                       {isDepleted ? (
                         <Button
@@ -1594,22 +1587,19 @@ export function InventoryList({
                           size="sm"
                           onClick={() => handleRestockItem(inv)}
                           disabled={isUpdating}
-                          className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 h-8"
+                          className="bg-green-50 text-green-700 border-green-200 h-7 text-xs px-2"
                         >
                           Restock
                         </Button>
                       ) : (
                         <>
-                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(inv, -1)} disabled={isUpdating}>-</Button>
-                          <div className="w-14 text-center">
-                            <div className="font-semibold">{inv.quantity}</div>
-                            <div className="text-xs text-gray-500">{inv.unit}</div>
-                          </div>
-                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleQuantityChange(inv, 1)} disabled={isUpdating}>+</Button>
+                          <Button variant="outline" size="icon" className="h-7 w-7 text-sm" onClick={() => handleQuantityChange(inv, -1)} disabled={isUpdating}>-</Button>
+                          <div className="w-10 text-center text-sm font-medium">{inv.quantity}</div>
+                          <Button variant="outline" size="icon" className="h-7 w-7 text-sm" onClick={() => handleQuantityChange(inv, 1)} disabled={isUpdating}>+</Button>
                         </>
                       )}
-                      <Button variant="ghost" size="sm" className="text-gray-600 hover:bg-gray-100 h-8" onClick={() => openEditDialog(inv)}>Edit</Button>
-                      <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 h-8" onClick={() => handleRemoveItem(inv)}>Remove</Button>
+                      <Button variant="ghost" size="sm" className="text-gray-500 h-7 px-2 text-xs" onClick={() => openEditDialog(inv)}>Edit</Button>
+                      <Button variant="ghost" size="sm" className="text-red-500 h-7 px-2 text-xs" onClick={() => handleRemoveItem(inv)}>✕</Button>
                     </div>
                   </div>
                 </CardContent>
