@@ -61,7 +61,7 @@ export default async function SettingsPage() {
     members = basicMembers
   }
 
-  // Get pending invites (may fail if migration hasn't run)
+  // Get all pending invites (including expired, so user can resend/delete)
   let invites: any[] = []
   if (sharingEnabled) {
     const { data: inviteData } = await supabase
@@ -69,7 +69,7 @@ export default async function SettingsPage() {
       .select('*')
       .eq('household_id', membership.household_id)
       .is('accepted_at', null)
-      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
     invites = inviteData || []
   }
 

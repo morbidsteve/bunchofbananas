@@ -17,6 +17,9 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { User } from '@supabase/supabase-js'
 
+// Admin emails - keep in sync with admin page
+const ADMIN_EMAILS = ['katzman.steven@gmail.com']
+
 interface DashboardNavProps {
   user: User
   household: { id: string; name: string } | null
@@ -119,6 +122,13 @@ export function DashboardNav({ user, household }: DashboardNavProps) {
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/settings">Settings</Link>
                 </DropdownMenuItem>
+                {ADMIN_EMAILS.includes(user.email || '') && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/admin" className="text-purple-600">
+                      Admin Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <form action={logout} className="w-full">

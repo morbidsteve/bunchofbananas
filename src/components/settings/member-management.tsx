@@ -79,13 +79,14 @@ export function MemberManagement({
       return
     }
 
-    // Check for existing pending invite
+    // Check for existing pending (non-expired) invite
     const { data: existingInvite } = await supabase
       .from('household_invites')
       .select('id')
       .eq('household_id', householdId)
       .eq('email', inviteForm.email.toLowerCase())
       .is('accepted_at', null)
+      .gt('expires_at', new Date().toISOString())
       .single()
 
     if (existingInvite) {
@@ -93,6 +94,15 @@ export function MemberManagement({
       setLoading(false)
       return
     }
+
+    // Delete any expired invites for this email first
+    await supabase
+      .from('household_invites')
+      .delete()
+      .eq('household_id', householdId)
+      .eq('email', inviteForm.email.toLowerCase())
+      .is('accepted_at', null)
+      .lt('expires_at', new Date().toISOString())
 
     const { data: newInvite, error } = await supabase
       .from('household_invites')
@@ -153,6 +163,60 @@ export function MemberManagement({
       toast.success('Invite cancelled')
       router.refresh()
     }
+  }
+
+  async function handleResendInvite(invite: HouseholdInvite) {
+    setLoading(true)
+    const supabase = createClient()
+
+    // Create a new invite (delete old one first)
+    await supabase
+      .from('household_invites')
+      .delete()
+      .eq('id', invite.id)
+
+    const { data: newInvite, error } = await supabase
+      .from('household_invites')
+      .insert({
+        household_id: householdId,
+        email: invite.email,
+        role: invite.role,
+        invited_by: currentUserId,
+      })
+      .select('token')
+      .single()
+
+    if (error) {
+      toast.error('Failed to resend invite')
+      setLoading(false)
+      return
+    }
+
+    // Send invite email
+    try {
+      const emailResponse = await fetch('/api/invite/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: invite.email,
+          householdName,
+          inviterName: currentUserEmail,
+          token: newInvite.token,
+          role: invite.role,
+        }),
+      })
+
+      if (emailResponse.ok) {
+        toast.success(`Invite resent to ${invite.email}`)
+      } else {
+        toast.success('Invite created (email may not have sent)')
+      }
+    } catch {
+      toast.success('Invite created (email may not have sent)')
+    }
+
+    router.refresh()
+    setLoading(false)
   }
 
   async function handleRemoveMember(memberId: string) {
@@ -320,37 +384,59 @@ export function MemberManagement({
         {invites.length > 0 && (
           <div className="pt-4 border-t space-y-3">
             <p className="text-sm font-medium text-gray-500">Pending Invites</p>
-            {invites.map((invite) => (
-              <div
-                key={invite.id}
-                className="flex items-center justify-between p-3 bg-amber-50 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-amber-200 rounded-full flex items-center justify-center">
-                    <span className="text-amber-700">?</span>
+            {invites.map((invite) => {
+              const isExpired = new Date(invite.expires_at) < new Date()
+              return (
+                <div
+                  key={invite.id}
+                  className={`flex items-center justify-between p-3 rounded-lg ${
+                    isExpired ? 'bg-red-50' : 'bg-amber-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      isExpired ? 'bg-red-200' : 'bg-amber-200'
+                    }`}>
+                      <span className={isExpired ? 'text-red-700' : 'text-amber-700'}>?</span>
+                    </div>
+                    <div>
+                      <p className="font-medium">{invite.email}</p>
+                      <p className={`text-sm ${isExpired ? 'text-red-600' : 'text-gray-500'}`}>
+                        {isExpired
+                          ? `Expired ${new Date(invite.expires_at).toLocaleDateString()}`
+                          : `Expires ${new Date(invite.expires_at).toLocaleDateString()}`
+                        }
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">{invite.email}</p>
-                    <p className="text-sm text-gray-500">
-                      Expires {new Date(invite.expires_at).toLocaleDateString()}
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={isExpired ? 'destructive' : 'outline'}>
+                      {isExpired ? 'Expired' : invite.role}
+                    </Badge>
+                    {isOwner && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleResendInvite(invite)}
+                          disabled={loading}
+                        >
+                          {loading ? '...' : 'Resend'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:bg-red-50"
+                          onClick={() => handleCancelInvite(invite.id)}
+                        >
+                          Delete
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{invite.role}</Badge>
-                  {isOwner && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-600 hover:bg-red-50"
-                      onClick={() => handleCancelInvite(invite.id)}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </CardContent>
