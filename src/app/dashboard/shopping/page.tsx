@@ -18,11 +18,13 @@ export default async function ShoppingPage() {
 
   if (!membership) redirect('/dashboard')
 
-  // Get all inventory grouped by category
+  // Get all inventory grouped by category (with shelf_id for receipt scanner)
   const { data: inventory } = await supabase
     .from('inventory')
     .select(`
       id,
+      item_id,
+      shelf_id,
       quantity,
       unit,
       expiration_date,
@@ -34,8 +36,10 @@ export default async function ShoppingPage() {
         do_not_restock
       ),
       shelves (
+        id,
         name,
         storage_units (
+          id,
           name,
           type
         )
@@ -120,6 +124,36 @@ export default async function ShoppingPage() {
   const bestPricesMap = calculateBestPrices((priceHistory || []) as any)
   const bestPrices = Object.fromEntries(bestPricesMap)
 
+  // Get stores for receipt scanner
+  const { data: stores } = await supabase
+    .from('stores')
+    .select('id, name, location')
+    .eq('household_id', membership.household_id)
+    .order('name')
+
+  // Get storage units with shelves for receipt scanner
+  const { data: storageUnits } = await supabase
+    .from('storage_units')
+    .select(`
+      id,
+      name,
+      type,
+      shelves (
+        id,
+        name,
+        position
+      )
+    `)
+    .eq('household_id', membership.household_id)
+    .order('name')
+
+  // Get all items for receipt scanner matching
+  const { data: allItems } = await supabase
+    .from('items')
+    .select('id, name, category')
+    .eq('household_id', membership.household_id)
+    .order('name')
+
   return (
     <ShoppingMode
       inventory={(inventory || []) as any}
@@ -127,6 +161,10 @@ export default async function ShoppingPage() {
       shoppingList={(shoppingList || []) as any}
       bestPrices={bestPrices}
       householdId={membership.household_id}
+      userId={user.id}
+      stores={(stores || []) as any}
+      storageUnits={(storageUnits || []) as any}
+      allItems={(allItems || []) as any}
     />
   )
 }

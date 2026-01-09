@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
@@ -11,8 +11,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Checkbox } from '@/components/ui/checkbox'
 import { toast } from 'sonner'
 
+// Lazy load the receipt wizard to avoid SSR issues with Tesseract
+const ReceiptWizard = lazy(() =>
+  import('@/components/receipts/receipt-wizard').then(mod => ({ default: mod.ReceiptWizard }))
+)
+
 interface InventoryItem {
   id: string
+  item_id: string
+  shelf_id: string
   quantity: number
   unit: string
   expiration_date: string | null
@@ -23,8 +30,10 @@ interface InventoryItem {
     do_not_restock?: boolean
   } | null
   shelves: {
+    id: string
     name: string
     storage_units: {
+      id: string
       name: string
       type: string
     } | null
@@ -68,12 +77,41 @@ interface BestPrice {
   recordedAt: string
 }
 
+interface Store {
+  id: string
+  name: string
+  location: string | null
+}
+
+interface Item {
+  id: string
+  name: string
+  category: string | null
+}
+
+interface Shelf {
+  id: string
+  name: string
+  position: number
+}
+
+interface StorageUnit {
+  id: string
+  name: string
+  type: string
+  shelves: Shelf[]
+}
+
 interface ShoppingModeProps {
   inventory: InventoryItem[]
   depletedItems?: DepletedItem[]
   shoppingList?: ShoppingListItem[]
   bestPrices?: Record<string, BestPrice>
   householdId: string
+  userId?: string
+  stores?: Store[]
+  storageUnits?: StorageUnit[]
+  allItems?: Item[]
 }
 
 const typeIcons: Record<string, string> = {
@@ -84,13 +122,24 @@ const typeIcons: Record<string, string> = {
   other: '📦',
 }
 
-export function ShoppingMode({ inventory, depletedItems = [], shoppingList = [], bestPrices = {}, householdId }: ShoppingModeProps) {
+export function ShoppingMode({
+  inventory,
+  depletedItems = [],
+  shoppingList = [],
+  bestPrices = {},
+  householdId,
+  userId,
+  stores = [],
+  storageUnits = [],
+  allItems = [],
+}: ShoppingModeProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [showRestockList, setShowRestockList] = useState(true)
   const [showShoppingList, setShowShoppingList] = useState(true)
   const [newItemName, setNewItemName] = useState('')
   const [addingItem, setAddingItem] = useState(false)
+  const [showReceiptWizard, setShowReceiptWizard] = useState(false)
 
   // Add item to shopping list
   async function addToShoppingList(itemId: string | null, customName?: string) {
@@ -190,13 +239,39 @@ export function ShoppingMode({ inventory, depletedItems = [], shoppingList = [],
     return acc
   }, {} as Record<string, InventoryItem[]>)
 
+  // Convert inventory to format needed by ReceiptWizard
+  const inventoryForWizard = inventory.map(inv => ({
+    id: inv.id,
+    item_id: inv.item_id,
+    shelf_id: inv.shelf_id,
+    quantity: inv.quantity,
+    unit: inv.unit,
+    items: inv.items,
+    shelves: inv.shelves,
+  }))
+
+  // Check if receipt scanner can be used
+  const canUseReceiptScanner = userId && storageUnits.length > 0 && storageUnits.some(u => u.shelves.length > 0)
+
   return (
     <div className="space-y-6">
       <div className="text-center">
         <div className="text-4xl mb-2" aria-hidden="true">🛒</div>
-        <h1 className="text-3xl font-bold text-gray-900">Shopping Mode</h1>
-        <p className="text-gray-600 mt-1">Search to see what you have at home</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Shopping Mode</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">Search to see what you have at home</p>
       </div>
+
+      {/* Scan Receipt Button */}
+      {canUseReceiptScanner && (
+        <div className="max-w-lg mx-auto">
+          <Button
+            onClick={() => setShowReceiptWizard(true)}
+            className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-6 text-lg"
+          >
+            <span className="mr-2">📷</span> Scan Receipt to Restock
+          </Button>
+        </div>
+      )}
 
       {/* Large Search Input */}
       <div className="max-w-lg mx-auto">
@@ -502,6 +577,30 @@ export function ShoppingMode({ inventory, depletedItems = [], shoppingList = [],
           </Card>
         )}
       </div>
+
+      {/* Receipt Scanner Wizard */}
+      {showReceiptWizard && userId && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+            <div className="text-white">Loading scanner...</div>
+          </div>
+        }>
+          <ReceiptWizard
+            householdId={householdId}
+            userId={userId}
+            shoppingList={shoppingList}
+            stores={stores}
+            items={allItems}
+            inventory={inventoryForWizard}
+            storageUnits={storageUnits}
+            onComplete={() => {
+              setShowReceiptWizard(false)
+              router.refresh()
+            }}
+            onCancel={() => setShowReceiptWizard(false)}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }
