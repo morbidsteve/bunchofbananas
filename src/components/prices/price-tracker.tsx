@@ -80,6 +80,7 @@ export function PriceTracker({
     packageSize: '',
     packageUnit: '',
   })
+  const [selectedPrice, setSelectedPrice] = useState<PriceHistoryItem | null>(null)
 
   const filteredHistory = priceHistory.filter((ph) =>
     ph.items?.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -235,8 +236,8 @@ export function PriceTracker({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Price Tracking</h1>
-          <p className="text-gray-600 mt-1">Track and compare prices across stores</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Price Tracking</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Track and compare prices across stores</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={storeDialogOpen} onOpenChange={setStoreDialogOpen}>
@@ -492,35 +493,38 @@ export function PriceTracker({
               {filteredHistory.map((ph) => {
                 const { pricePerUnit, displayUnit } = calculatePricePerUnit(ph)
                 return (
-                  <Card key={ph.id}>
+                  <Card
+                    key={ph.id}
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    onClick={() => setSelectedPrice(ph)}
+                  >
                     <CardContent className="py-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <div className="text-2xl">🏷️</div>
                           <div>
-                            <div className="font-medium">{ph.items?.name}</div>
-                            <div className="text-sm text-gray-500">
+                            <div className="font-medium text-gray-900 dark:text-gray-100">{ph.items?.name}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400">
                               {ph.stores?.name} {ph.stores?.location && `• ${ph.stores.location}`}
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 justify-end">
                             <span className="text-lg font-semibold">{formatPrice(ph.price)}</span>
                             {ph.on_sale && <Badge variant="destructive">Sale</Badge>}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          {ph.package_size && ph.package_unit && (
+                            <Badge className="bg-green-600 mt-1">
+                              {formatPrice(pricePerUnit)}/{displayUnit}
+                            </Badge>
+                          )}
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             {ph.quantity} {ph.unit}
                             {ph.package_size && ph.package_unit && (
-                              <span> ({ph.package_size} {ph.package_unit})</span>
+                              <span> • {ph.package_size} {ph.package_unit}</span>
                             )}
-                            {' • '}{formatDate(ph.recorded_at)}
                           </div>
-                          {(ph.package_size && ph.package_unit) && (
-                            <div className="text-xs text-green-600 font-medium">
-                              {formatPrice(pricePerUnit)}/{displayUnit}
-                            </div>
-                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -551,17 +555,17 @@ export function PriceTracker({
                       <div className="flex items-center gap-4">
                         <div className="text-2xl">⭐</div>
                         <div>
-                          <div className="font-medium">{bp.item.name}</div>
-                          <div className="text-sm text-gray-500">
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{bp.item.name}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
                             Best at {bp.lowest.stores?.name} • {bp.priceCount} price{bp.priceCount !== 1 ? 's' : ''} recorded
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-semibold text-green-600">
+                        <Badge className="bg-green-600 text-base">
                           {formatPrice(bp.lowest.unitPrice)}/{bp.lowest.displayUnit}
-                        </div>
-                        <div className="text-sm text-gray-500">
+                        </Badge>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                           {formatPrice(bp.lowest.price)} for {bp.lowest.quantity} {bp.lowest.unit}
                           {bp.lowest.package_size && bp.lowest.package_unit && (
                             <span> ({bp.lowest.package_size} {bp.lowest.package_unit})</span>
@@ -618,6 +622,61 @@ export function PriceTracker({
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Price Detail Dialog */}
+      <Dialog open={!!selectedPrice} onOpenChange={() => setSelectedPrice(null)}>
+        <DialogContent className="max-w-md">
+          {selectedPrice && (() => {
+            const { pricePerUnit, displayUnit } = calculatePricePerUnit(selectedPrice)
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{selectedPrice.items?.name}</DialogTitle>
+                  <DialogDescription>
+                    Price recorded on {formatDate(selectedPrice.recorded_at)}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Total Price</span>
+                      <span className="text-xl font-bold">{formatPrice(selectedPrice.price)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Quantity</span>
+                      <span>{selectedPrice.quantity} {selectedPrice.unit}</span>
+                    </div>
+                    {selectedPrice.package_size && selectedPrice.package_unit && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Package Size</span>
+                        <span>{selectedPrice.package_size} {selectedPrice.package_unit}</span>
+                      </div>
+                    )}
+                    <div className="border-t dark:border-gray-700 pt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600 dark:text-gray-400 font-medium">Price per {displayUnit}</span>
+                        <Badge className="bg-green-600 text-lg px-3 py-1">
+                          {formatPrice(pricePerUnit)}/{displayUnit}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <span>🏪</span>
+                    <span>{selectedPrice.stores?.name}</span>
+                    {selectedPrice.stores?.location && (
+                      <span>• {selectedPrice.stores.location}</span>
+                    )}
+                  </div>
+                  {selectedPrice.on_sale && (
+                    <Badge variant="destructive" className="w-fit">Sale Price</Badge>
+                  )}
+                </div>
+              </>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
