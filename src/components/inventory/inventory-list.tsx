@@ -166,7 +166,16 @@ export function InventoryList({
     unit: '',
     shelfId: '',
     expirationDate: '',
+    // Price fields
+    storeId: '',
+    newStoreName: '',
+    price: '',
+    packageSize: '',
+    packageUnit: '',
+    onSale: false,
+    priceHistoryId: '', // If editing existing price record
   })
+  const [loadingPrice, setLoadingPrice] = useState(false)
 
   // Nutrition data from barcode scan
   const [scannedNutrition, setScannedNutrition] = useState<{
@@ -602,7 +611,7 @@ export function InventoryList({
     router.refresh()
   }
 
-  function openEditDialog(inv: InventoryItem) {
+  async function openEditDialog(inv: InventoryItem) {
     setEditingInventory(inv)
     setEditForm({
       itemName: inv.items?.name || '',
@@ -611,8 +620,42 @@ export function InventoryList({
       unit: inv.unit,
       shelfId: inv.shelves?.id || '',
       expirationDate: inv.expiration_date || '',
+      // Reset price fields
+      storeId: '',
+      newStoreName: '',
+      price: '',
+      packageSize: '',
+      packageUnit: '',
+      onSale: false,
+      priceHistoryId: '',
     })
     setEditDialogOpen(true)
+
+    // Fetch the latest price for this item
+    if (inv.items?.id) {
+      setLoadingPrice(true)
+      const supabase = createClient()
+      const { data: latestPrice } = await supabase
+        .from('price_history')
+        .select('*, stores(name)')
+        .eq('item_id', inv.items.id)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (latestPrice) {
+        setEditForm(prev => ({
+          ...prev,
+          storeId: latestPrice.store_id || '',
+          price: latestPrice.price?.toString() || '',
+          packageSize: latestPrice.package_size?.toString() || '',
+          packageUnit: latestPrice.package_unit || '',
+          onSale: latestPrice.on_sale || false,
+          priceHistoryId: latestPrice.id,
+        }))
+      }
+      setLoadingPrice(false)
+    }
   }
 
   async function handleEditInventory(e: React.FormEvent) {
@@ -657,6 +700,54 @@ export function InventoryList({
       toast.error('Failed to update inventory')
       setLoading(false)
       return
+    }
+
+    // Handle price update/creation
+    let storeId = editForm.storeId
+
+    // Create new store if needed
+    if (editForm.newStoreName && !editForm.storeId) {
+      const { data: newStore, error: storeError } = await supabase
+        .from('stores')
+        .insert({
+          household_id: householdId,
+          name: editForm.newStoreName,
+        })
+        .select()
+        .single()
+
+      if (!storeError && newStore) {
+        storeId = newStore.id
+      }
+    }
+
+    // Save price history if price is provided
+    if (editForm.price && storeId) {
+      const priceData: Record<string, unknown> = {
+        item_id: editingInventory.items.id,
+        store_id: storeId,
+        price: parseFloat(editForm.price),
+        quantity: parseFloat(editForm.quantity),
+        unit: editForm.unit,
+        recorded_by: userId,
+        on_sale: editForm.onSale,
+      }
+
+      if (editForm.packageSize && editForm.packageUnit) {
+        priceData.package_size = parseFloat(editForm.packageSize)
+        priceData.package_unit = editForm.packageUnit
+      }
+
+      if (editForm.priceHistoryId) {
+        // Update existing price record
+        await supabase
+          .from('price_history')
+          .update(priceData)
+          .eq('id', editForm.priceHistoryId)
+      } else {
+        // Create new price record
+        await supabase.from('price_history').insert(priceData)
+      }
     }
 
     toast.success(`${editForm.itemName} updated`)
@@ -1506,6 +1597,121 @@ export function InventoryList({
                 value={editForm.expirationDate}
                 onChange={(e) => setEditForm({ ...editForm, expirationDate: e.target.value })}
               />
+            </div>
+
+            {/* Price Section */}
+            <div className="border-t pt-4 mt-2">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Last Price Paid</p>
+                {loadingPrice && <span className="text-xs text-gray-400">Loading...</span>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs">Store</Label>
+                  {stores.length > 0 ? (
+                    <Select
+                      value={editForm.storeId || 'none'}
+                      onValueChange={(value) => setEditForm({ ...editForm, storeId: value === 'none' ? '' : value, newStoreName: '' })}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select store" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {store.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      placeholder="Store name"
+                      value={editForm.newStoreName}
+                      onChange={(e) => setEditForm({ ...editForm, newStoreName: e.target.value })}
+                      className="h-9"
+                    />
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Price ($)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={editForm.price}
+                    onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                    className="h-9"
+                  />
+                </div>
+              </div>
+
+              {stores.length > 0 && !editForm.storeId && (
+                <Input
+                  placeholder="Or enter new store name"
+                  value={editForm.newStoreName}
+                  onChange={(e) => setEditForm({ ...editForm, newStoreName: e.target.value, storeId: '' })}
+                  className="mt-2 h-9"
+                />
+              )}
+
+              {/* Package size for price per unit */}
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs">Package Size</Label>
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={editForm.packageSize}
+                    onChange={(e) => setEditForm({ ...editForm, packageSize: e.target.value })}
+                    placeholder="e.g., 16"
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Size Unit</Label>
+                  <Select
+                    value={editForm.packageUnit}
+                    onValueChange={(value) => setEditForm({ ...editForm, packageUnit: value })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="oz">oz (weight)</SelectItem>
+                      <SelectItem value="lb">lb</SelectItem>
+                      <SelectItem value="g">grams</SelectItem>
+                      <SelectItem value="kg">kg</SelectItem>
+                      <SelectItem value="fl_oz">fl oz</SelectItem>
+                      <SelectItem value="ml">ml</SelectItem>
+                      <SelectItem value="L">liters</SelectItem>
+                      <SelectItem value="gallon">gallon</SelectItem>
+                      <SelectItem value="count">count</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* On sale checkbox */}
+              <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editForm.onSale}
+                  onChange={(e) => setEditForm({ ...editForm, onSale: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-400">This was a sale price</span>
+              </label>
+
+              {editForm.price && editForm.packageSize && editForm.packageUnit && (
+                <p className="text-xs text-green-600 mt-2">
+                  = ${(parseFloat(editForm.price) / parseFloat(editForm.packageSize)).toFixed(2)}/{editForm.packageUnit}
+                </p>
+              )}
             </div>
 
             <div className="flex gap-2 justify-end">
