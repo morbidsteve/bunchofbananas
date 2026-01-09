@@ -50,8 +50,12 @@ export async function POST(request: NextRequest) {
     const resend = new Resend(process.env.RESEND_API_KEY)
     const inviteUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://bunchofbananas.vercel.app'}/invite/${token}`
 
+    // Use custom domain if configured, otherwise fall back to Resend test domain
+    // Note: resend.dev can only send to the account owner's email
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'BunchOfBananas <onboarding@resend.dev>'
+
     const { data, error } = await resend.emails.send({
-      from: 'BunchOfBananas <noreply@resend.dev>',
+      from: fromEmail,
       to: email,
       subject: `You've been invited to join ${householdName} on BunchOfBananas`,
       html: `
@@ -106,11 +110,18 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Failed to send invite email:', error)
       return NextResponse.json(
-        { error: 'Failed to send email. Please try again later.' },
+        {
+          error: 'Failed to send email',
+          details: error.message,
+          hint: error.message?.includes('domain')
+            ? 'You need to verify a domain in Resend to send to external emails'
+            : undefined
+        },
         { status: 500 }
       )
     }
 
+    console.log('Email sent successfully:', data?.id)
     return NextResponse.json({ success: true, messageId: data?.id })
   } catch (error) {
     console.error('Invite email error:', error)

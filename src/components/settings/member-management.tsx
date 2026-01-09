@@ -122,6 +122,7 @@ export function MemberManagement({
     }
 
     // Send invite email
+    let emailSent = false
     try {
       const emailResponse = await fetch('/api/invite/send', {
         method: 'POST',
@@ -135,14 +136,26 @@ export function MemberManagement({
         }),
       })
 
-      if (!emailResponse.ok) {
-        console.warn('Email sending failed, but invite was created')
+      if (emailResponse.ok) {
+        emailSent = true
+      } else {
+        const errorData = await emailResponse.json().catch(() => ({}))
+        console.warn('Email sending failed:', errorData)
+        if (errorData.hint) {
+          toast.error(errorData.hint)
+        } else if (errorData.details) {
+          toast.error(`Email failed: ${errorData.details}`)
+        }
       }
     } catch (emailError) {
       console.warn('Email sending failed:', emailError)
     }
 
-    toast.success(`Invite sent to ${inviteForm.email}`)
+    if (emailSent) {
+      toast.success(`Invite sent to ${inviteForm.email}`)
+    } else {
+      toast.warning(`Invite created for ${inviteForm.email} (email may not have sent)`)
+    }
     setDialogOpen(false)
     setInviteForm({ email: '', role: 'member' })
     router.refresh()
@@ -207,12 +220,19 @@ export function MemberManagement({
       })
 
       if (emailResponse.ok) {
-        toast.success(`Invite resent to ${invite.email}`)
+        toast.success(`Invite sent to ${invite.email}`)
       } else {
-        toast.success('Invite created (email may not have sent)')
+        const errorData = await emailResponse.json().catch(() => ({}))
+        if (errorData.hint) {
+          toast.error(errorData.hint)
+        } else if (errorData.details) {
+          toast.error(`Email failed: ${errorData.details}`)
+        } else {
+          toast.warning('Invite created but email may not have sent')
+        }
       }
     } catch {
-      toast.success('Invite created (email may not have sent)')
+      toast.warning('Invite created but email may not have sent')
     }
 
     router.refresh()
@@ -415,6 +435,17 @@ export function MemberManagement({
                     </Badge>
                     {isOwner && (
                       <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const url = `${window.location.origin}/invite/${invite.token}`
+                            navigator.clipboard.writeText(url)
+                            toast.success('Invite link copied!')
+                          }}
+                        >
+                          Copy Link
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
