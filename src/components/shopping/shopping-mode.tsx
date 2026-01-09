@@ -1,10 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Checkbox } from '@/components/ui/checkbox'
+import { toast } from 'sonner'
 
 interface InventoryItem {
   id: string
@@ -15,6 +20,7 @@ interface InventoryItem {
     id: string
     name: string
     category: string | null
+    do_not_restock?: boolean
   } | null
   shelves: {
     name: string
@@ -29,6 +35,22 @@ interface DepletedItem {
   id: string
   name: string
   category: string | null
+}
+
+interface ShoppingListItem {
+  id: string
+  item_id: string | null
+  custom_name: string | null
+  quantity: number
+  unit: string | null
+  is_checked: boolean
+  notes: string | null
+  created_at: string
+  items: {
+    id: string
+    name: string
+    category: string | null
+  } | null
 }
 
 interface BestPrice {
@@ -49,7 +71,9 @@ interface BestPrice {
 interface ShoppingModeProps {
   inventory: InventoryItem[]
   depletedItems?: DepletedItem[]
+  shoppingList?: ShoppingListItem[]
   bestPrices?: Record<string, BestPrice>
+  householdId: string
 }
 
 const typeIcons: Record<string, string> = {
@@ -60,9 +84,96 @@ const typeIcons: Record<string, string> = {
   other: '📦',
 }
 
-export function ShoppingMode({ inventory, depletedItems = [], bestPrices = {} }: ShoppingModeProps) {
+export function ShoppingMode({ inventory, depletedItems = [], shoppingList = [], bestPrices = {}, householdId }: ShoppingModeProps) {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [showRestockList, setShowRestockList] = useState(true)
+  const [showShoppingList, setShowShoppingList] = useState(true)
+  const [newItemName, setNewItemName] = useState('')
+  const [addingItem, setAddingItem] = useState(false)
+
+  // Add item to shopping list
+  async function addToShoppingList(itemId: string | null, customName?: string) {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { error } = await supabase.from('shopping_list').insert({
+      household_id: householdId,
+      item_id: itemId,
+      custom_name: customName || null,
+      added_by: user.id,
+    })
+
+    if (error) {
+      toast.error('Failed to add to shopping list')
+    } else {
+      toast.success('Added to shopping list')
+      router.refresh()
+    }
+  }
+
+  // Toggle item checked status
+  async function toggleChecked(listItemId: string, currentChecked: boolean) {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('shopping_list')
+      .update({ is_checked: !currentChecked })
+      .eq('id', listItemId)
+
+    if (error) {
+      toast.error('Failed to update item')
+    } else {
+      router.refresh()
+    }
+  }
+
+  // Remove item from shopping list
+  async function removeFromShoppingList(listItemId: string) {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('shopping_list')
+      .delete()
+      .eq('id', listItemId)
+
+    if (error) {
+      toast.error('Failed to remove item')
+    } else {
+      toast.success('Removed from list')
+      router.refresh()
+    }
+  }
+
+  // Clear all checked items
+  async function clearCheckedItems() {
+    const supabase = createClient()
+    const checkedIds = shoppingList.filter(item => item.is_checked).map(item => item.id)
+
+    if (checkedIds.length === 0) return
+
+    const { error } = await supabase
+      .from('shopping_list')
+      .delete()
+      .in('id', checkedIds)
+
+    if (error) {
+      toast.error('Failed to clear items')
+    } else {
+      toast.success(`Cleared ${checkedIds.length} items`)
+      router.refresh()
+    }
+  }
+
+  // Add custom item to list
+  async function handleAddCustomItem(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newItemName.trim()) return
+
+    setAddingItem(true)
+    await addToShoppingList(null, newItemName.trim())
+    setNewItemName('')
+    setAddingItem(false)
+  }
 
   const filteredInventory = search.length >= 2
     ? inventory.filter((inv) =>
@@ -145,36 +256,47 @@ export function ShoppingMode({ inventory, depletedItems = [], bestPrices = {} }:
                                 </div>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-lg font-semibold">
-                                {inv.quantity} {inv.unit}
+                            <div className="text-right flex items-center gap-2">
+                              <div>
+                                <div className="text-lg font-semibold">
+                                  {inv.quantity} {inv.unit}
+                                </div>
+                                <div className="flex flex-col items-end gap-1">
+                                  {inv.items?.id && bestPrices[inv.items.id] && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge className="bg-green-600 cursor-help text-xs">
+                                          ${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Best at {bestPrices[inv.items.id].storeName}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  {inv.expiration_date && (
+                                    <Badge
+                                      variant={
+                                        new Date(inv.expiration_date) <= new Date()
+                                          ? 'destructive'
+                                          : 'secondary'
+                                      }
+                                      className="text-xs"
+                                    >
+                                      Exp: {new Date(inv.expiration_date).toLocaleDateString()}
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
-                              <div className="flex flex-col items-end gap-1">
-                                {inv.items?.id && bestPrices[inv.items.id] && (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Badge className="bg-green-600 cursor-help text-xs">
-                                        ${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      Best at {bestPrices[inv.items.id].storeName}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )}
-                                {inv.expiration_date && (
-                                  <Badge
-                                    variant={
-                                      new Date(inv.expiration_date) <= new Date()
-                                        ? 'destructive'
-                                        : 'secondary'
-                                    }
-                                    className="text-xs"
-                                  >
-                                    Exp: {new Date(inv.expiration_date).toLocaleDateString()}
-                                  </Badge>
-                                )}
-                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                                onClick={() => inv.items?.id && addToShoppingList(inv.items.id)}
+                                title="Add to shopping list"
+                              >
+                                🛒+
+                              </Button>
                             </div>
                           </div>
                         </CardContent>
@@ -212,7 +334,7 @@ export function ShoppingMode({ inventory, depletedItems = [], bestPrices = {} }:
       {depletedItems.length > 0 && (
         <div className="max-w-lg mx-auto mt-8 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <span aria-hidden="true">📝</span> Needs Restocking ({depletedItems.length})
             </h2>
             <button
@@ -224,20 +346,20 @@ export function ShoppingMode({ inventory, depletedItems = [], bestPrices = {} }:
           </div>
 
           {showRestockList && (
-            <Card className="border-amber-200 bg-amber-50">
+            <Card className="border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700">
               <CardContent className="py-4">
-                <p className="text-sm text-amber-800 mb-3">
+                <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
                   These items are depleted and may need to be purchased:
                 </p>
                 <div className="space-y-2">
                   {depletedItems.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-amber-200"
+                      className="flex items-center justify-between py-2 px-3 bg-white dark:bg-gray-800 rounded-lg border border-amber-200 dark:border-amber-700"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-lg" aria-hidden="true">🛒</span>
-                        <span className="font-medium">{item.name}</span>
+                        <span className="font-medium dark:text-gray-100">{item.name}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {bestPrices[item.id] && (
@@ -257,6 +379,15 @@ export function ShoppingMode({ inventory, depletedItems = [], bestPrices = {} }:
                             {item.category}
                           </Badge>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/40 h-8 px-2"
+                          onClick={() => addToShoppingList(item.id)}
+                          title="Add to shopping list"
+                        >
+                          + List
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -266,6 +397,111 @@ export function ShoppingMode({ inventory, depletedItems = [], bestPrices = {} }:
           )}
         </div>
       )}
+
+      {/* Shopping List Section */}
+      <div className="max-w-lg mx-auto mt-8 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <span aria-hidden="true">🛒</span> Shopping List ({shoppingList.length})
+          </h2>
+          <div className="flex items-center gap-2">
+            {shoppingList.some(item => item.is_checked) && (
+              <button
+                onClick={clearCheckedItems}
+                className="text-sm text-red-600 hover:underline"
+              >
+                Clear checked
+              </button>
+            )}
+            <button
+              onClick={() => setShowShoppingList(!showShoppingList)}
+              className="text-sm text-amber-600 hover:underline"
+            >
+              {showShoppingList ? 'Hide' : 'Show'}
+            </button>
+          </div>
+        </div>
+
+        {showShoppingList && (
+          <Card className="border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700">
+            <CardContent className="py-4">
+              {/* Add new item form */}
+              <form onSubmit={handleAddCustomItem} className="flex gap-2 mb-4">
+                <Input
+                  placeholder="Add item to list..."
+                  value={newItemName}
+                  onChange={(e) => setNewItemName(e.target.value)}
+                  className="flex-1 bg-white dark:bg-gray-800"
+                />
+                <Button
+                  type="submit"
+                  className="bg-amber-500 hover:bg-amber-600"
+                  disabled={addingItem || !newItemName.trim()}
+                >
+                  Add
+                </Button>
+              </form>
+
+              {shoppingList.length === 0 ? (
+                <p className="text-sm text-blue-800 dark:text-blue-200 text-center py-4">
+                  Your shopping list is empty. Add items above or from your inventory!
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {shoppingList.map((item) => {
+                    const itemName = item.items?.name || item.custom_name || 'Unknown Item'
+                    const itemId = item.items?.id || item.item_id
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex items-center justify-between py-2 px-3 rounded-lg border transition-colors ${
+                          item.is_checked
+                            ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 opacity-60'
+                            : 'bg-white dark:bg-gray-800 border-blue-200 dark:border-blue-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            checked={item.is_checked}
+                            onCheckedChange={() => toggleChecked(item.id, item.is_checked)}
+                          />
+                          <span className={`font-medium dark:text-gray-100 ${item.is_checked ? 'line-through' : ''}`}>
+                            {itemName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {itemId && bestPrices[itemId] && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge className="bg-green-600 cursor-help text-xs">
+                                  ${bestPrices[itemId].pricePerUnit.toFixed(2)}/{bestPrices[itemId].displayUnit}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Best at {bestPrices[itemId].storeName}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 w-8 p-0"
+                            onClick={() => removeFromShoppingList(item.id)}
+                            title="Remove from list"
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   )
 }

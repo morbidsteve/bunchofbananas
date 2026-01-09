@@ -214,6 +214,10 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
     quantity: '1',
     unit: 'count',
     expirationDate: '',
+    price: '',
+    storeName: '',
+    packageSize: '',
+    packageUnit: '',
   })
   const [isNewItem, setIsNewItem] = useState(false)
 
@@ -384,6 +388,10 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
       quantity: '1',
       unit: 'count',
       expirationDate: '',
+      price: '',
+      storeName: '',
+      packageSize: '',
+      packageUnit: '',
     })
     setIsNewItem(false)
     setAddItemDialogOpen(true)
@@ -433,6 +441,52 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
     if (error) {
       toast.error('Failed to add item')
     } else {
+      // Save price history if price was entered
+      if (addItemForm.price && parseFloat(addItemForm.price) > 0) {
+        let storeId: string | null = null
+
+        // Create or find store if name was provided
+        if (addItemForm.storeName.trim()) {
+          // Check if store exists
+          const { data: existingStore } = await supabase
+            .from('stores')
+            .select('id')
+            .eq('household_id', householdId)
+            .ilike('name', addItemForm.storeName.trim())
+            .single()
+
+          if (existingStore) {
+            storeId = existingStore.id
+          } else {
+            // Create new store
+            const { data: newStore } = await supabase
+              .from('stores')
+              .insert({
+                household_id: householdId,
+                name: addItemForm.storeName.trim(),
+              })
+              .select('id')
+              .single()
+
+            if (newStore) {
+              storeId = newStore.id
+            }
+          }
+        }
+
+        // Add price history record
+        await supabase.from('price_history').insert({
+          item_id: itemId,
+          store_id: storeId,
+          price: parseFloat(addItemForm.price),
+          quantity: parseFloat(addItemForm.quantity),
+          unit: addItemForm.unit,
+          package_size: addItemForm.packageSize ? parseFloat(addItemForm.packageSize) : null,
+          package_unit: addItemForm.packageUnit || null,
+          recorded_by: userId,
+        })
+      }
+
       const itemName = isNewItem ? addItemForm.newItemName : items.find(i => i.id === itemId)?.name
       toast.success(`Added ${itemName}`)
       setAddItemDialogOpen(false)
@@ -830,6 +884,76 @@ export function StorageDetail({ storageUnit, householdId, userId, items }: Stora
                 value={addItemForm.expirationDate}
                 onChange={(e) => setAddItemForm({ ...addItemForm, expirationDate: e.target.value })}
               />
+            </div>
+
+            {/* Price Section */}
+            <div className="border-t pt-4 mt-4">
+              <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 block">
+                Price Info (optional)
+              </Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="price">Price Paid ($)</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={addItemForm.price}
+                    onChange={(e) => setAddItemForm({ ...addItemForm, price: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="storeName">Store</Label>
+                  <Input
+                    id="storeName"
+                    value={addItemForm.storeName}
+                    onChange={(e) => setAddItemForm({ ...addItemForm, storeName: e.target.value })}
+                    placeholder="Costco, Walmart..."
+                  />
+                </div>
+              </div>
+
+              {/* Package size for price-per-unit calculation */}
+              {addItemForm.price && (
+                <div className="mt-3">
+                  <Label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">
+                    Package size (for price per oz/lb calculation)
+                  </Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={addItemForm.packageSize}
+                        onChange={(e) => setAddItemForm({ ...addItemForm, packageSize: e.target.value })}
+                        placeholder="16"
+                      />
+                    </div>
+                    <Select
+                      value={addItemForm.packageUnit}
+                      onValueChange={(value) => setAddItemForm({ ...addItemForm, packageUnit: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="oz">oz</SelectItem>
+                        <SelectItem value="fl_oz">fl oz</SelectItem>
+                        <SelectItem value="lb">lb</SelectItem>
+                        <SelectItem value="g">g</SelectItem>
+                        <SelectItem value="kg">kg</SelectItem>
+                        <SelectItem value="ml">ml</SelectItem>
+                        <SelectItem value="L">L</SelectItem>
+                        <SelectItem value="gallon">gallon</SelectItem>
+                        <SelectItem value="count">count</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 justify-end">

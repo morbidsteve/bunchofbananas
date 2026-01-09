@@ -40,6 +40,7 @@ export default async function ItemsPage() {
       sugar_g,
       sodium_mg,
       nutriscore,
+      do_not_restock,
       inventory (
         id,
         quantity,

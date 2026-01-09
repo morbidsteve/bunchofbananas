@@ -30,7 +30,8 @@ export default async function ShoppingPage() {
         id,
         name,
         category,
-        household_id
+        household_id,
+        do_not_restock
       ),
       shelves (
         name,
@@ -50,6 +51,7 @@ export default async function ShoppingPage() {
       id,
       name,
       category,
+      do_not_restock,
       inventory (
         quantity
       )
@@ -58,7 +60,9 @@ export default async function ShoppingPage() {
     .order('name')
 
   // Calculate depleted items (items with 0 total quantity across all locations)
+  // Exclude items marked as do_not_restock
   const depletedItems = (items || []).filter(item => {
+    if (item.do_not_restock) return false
     const totalQty = item.inventory?.reduce((sum: number, inv: { quantity: number }) => sum + inv.quantity, 0) || 0
     return item.inventory && item.inventory.length > 0 && totalQty === 0
   }).map(item => ({
@@ -66,6 +70,28 @@ export default async function ShoppingPage() {
     name: item.name,
     category: item.category,
   }))
+
+  // Get shopping list items
+  const { data: shoppingList } = await supabase
+    .from('shopping_list')
+    .select(`
+      id,
+      item_id,
+      custom_name,
+      quantity,
+      unit,
+      is_checked,
+      notes,
+      created_at,
+      items (
+        id,
+        name,
+        category
+      )
+    `)
+    .eq('household_id', membership.household_id)
+    .order('is_checked')
+    .order('created_at', { ascending: false })
 
   // Get price history for best price calculations
   const { data: priceHistory } = await supabase
@@ -94,5 +120,13 @@ export default async function ShoppingPage() {
   const bestPricesMap = calculateBestPrices((priceHistory || []) as any)
   const bestPrices = Object.fromEntries(bestPricesMap)
 
-  return <ShoppingMode inventory={(inventory || []) as any} depletedItems={depletedItems} bestPrices={bestPrices} />
+  return (
+    <ShoppingMode
+      inventory={(inventory || []) as any}
+      depletedItems={depletedItems}
+      shoppingList={(shoppingList || []) as any}
+      bestPrices={bestPrices}
+      householdId={membership.household_id}
+    />
+  )
 }

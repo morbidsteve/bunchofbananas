@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Switch } from '@/components/ui/switch'
 
 interface InventoryEntry {
   id: string
@@ -50,6 +51,7 @@ interface ItemWithInventory {
   sugar_g: number | null
   sodium_mg: number | null
   nutriscore: string | null
+  do_not_restock: boolean | null
   inventory: InventoryEntry[]
 }
 
@@ -118,6 +120,7 @@ export function ItemsManager({
     category: '',
     default_unit: 'count',
     barcode: '',
+    do_not_restock: false,
   })
 
   const [moveForm, setMoveForm] = useState({
@@ -136,6 +139,7 @@ export function ItemsManager({
       category: item.category || '',
       default_unit: item.default_unit || 'count',
       barcode: item.barcode || '',
+      do_not_restock: item.do_not_restock || false,
     })
     setEditDialogOpen(true)
   }
@@ -163,6 +167,7 @@ export function ItemsManager({
         category: editForm.category || null,
         default_unit: editForm.default_unit,
         barcode: editForm.barcode || null,
+        do_not_restock: editForm.do_not_restock,
       })
       .eq('id', selectedItem.id)
 
@@ -498,6 +503,21 @@ export function ItemsManager({
                 value={editForm.barcode}
                 onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })}
                 placeholder="UPC or EAN code"
+              />
+            </div>
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div>
+                <Label htmlFor="doNotRestock" className="font-medium">
+                  Don&apos;t show in restocking list
+                </Label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Hide this item from the shopping page&apos;s restocking suggestions
+                </p>
+              </div>
+              <Switch
+                id="doNotRestock"
+                checked={editForm.do_not_restock}
+                onCheckedChange={(checked) => setEditForm({ ...editForm, do_not_restock: checked })}
               />
             </div>
             <div className="flex gap-2 justify-end">
