@@ -1467,50 +1467,46 @@ export function InventoryList({
                 }`}
               >
                 <CardContent className="p-3">
-                  <div className="flex items-center gap-3">
-                    {/* Checkbox */}
+                  {/* Row 1: Checkbox, Icon, Name + Badges */}
+                  <div className="flex items-start gap-2">
                     <input
                       type="checkbox"
                       checked={selectedIds.has(inv.id)}
                       onChange={() => toggleItemSelection(inv.id)}
-                      className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 shrink-0"
+                      className="h-4 w-4 mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500 shrink-0"
                     />
-
-                    {/* Icon */}
                     <span className="text-lg shrink-0">{typeIcons[inv.shelves?.storage_units?.type || 'other']}</span>
-
-                    {/* Item info - grows to fill space */}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-medium text-gray-900 dark:text-gray-100">{inv.items?.name}</span>
                         {inv.items?.id && bestPrices[inv.items.id] && (
                           <Badge className="bg-green-600 text-xs">${bestPrices[inv.items.id].pricePerUnit.toFixed(2)}/{bestPrices[inv.items.id].displayUnit}</Badge>
                         )}
-                        {inv.priority === 'urgent' && <Badge className="bg-red-500 text-xs">Urgent</Badge>}
-                        {inv.priority === 'use_soon' && <Badge className="bg-orange-500 text-xs">Use Soon</Badge>}
+                        {inv.priority === 'urgent' && <Badge className="bg-red-500 text-xs">!</Badge>}
+                        {inv.priority === 'use_soon' && <Badge className="bg-orange-500 text-xs">Soon</Badge>}
                         {getExpirationBadge(inv.expiration_date)}
-                        {isDepleted && <Badge variant="secondary" className="text-xs">Depleted</Badge>}
+                        {isDepleted && <Badge variant="secondary" className="text-xs">Empty</Badge>}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{inv.shelves?.storage_units?.name} → {inv.shelves?.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{inv.shelves?.storage_units?.name} → {inv.shelves?.name}</div>
                     </div>
+                  </div>
 
-                    {/* Controls - fixed on right */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {!isDepleted && (
-                        <button onClick={() => openPriorityDialog(inv)} className={`p-1 rounded ${hasPriority ? 'text-orange-500' : 'text-gray-300 hover:text-gray-500'}`}>⚡</button>
-                      )}
-                      {isDepleted ? (
-                        <Button size="sm" variant="outline" onClick={() => handleRestockItem(inv)} disabled={isUpdating} className="h-7 text-xs bg-green-50 text-green-700 border-green-200">Restock</Button>
-                      ) : (
-                        <>
-                          <Button size="sm" variant="outline" onClick={() => handleQuantityChange(inv, -1)} disabled={isUpdating} className="h-7 w-7 p-0">-</Button>
-                          <span className="w-8 text-center text-sm font-medium">{inv.quantity}</span>
-                          <Button size="sm" variant="outline" onClick={() => handleQuantityChange(inv, 1)} disabled={isUpdating} className="h-7 w-7 p-0">+</Button>
-                        </>
-                      )}
-                      <button onClick={() => openEditDialog(inv)} className="p-1 text-gray-400 hover:text-gray-600 text-xs">Edit</button>
-                      <button onClick={() => handleRemoveItem(inv)} className="p-1 text-red-400 hover:text-red-600">✕</button>
-                    </div>
+                  {/* Row 2: Controls */}
+                  <div className="flex items-center justify-end gap-1 mt-2 pl-7">
+                    {!isDepleted && (
+                      <button onClick={() => openPriorityDialog(inv)} className={`p-1 ${hasPriority ? 'text-orange-500' : 'text-gray-300'}`}>⚡</button>
+                    )}
+                    {isDepleted ? (
+                      <Button size="sm" variant="outline" onClick={() => handleRestockItem(inv)} disabled={isUpdating} className="h-7 text-xs bg-green-50 text-green-700 border-green-200">Restock</Button>
+                    ) : (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => handleQuantityChange(inv, -1)} disabled={isUpdating} className="h-7 w-7 p-0">-</Button>
+                        <span className="w-8 text-center text-sm font-semibold">{inv.quantity}</span>
+                        <Button size="sm" variant="outline" onClick={() => handleQuantityChange(inv, 1)} disabled={isUpdating} className="h-7 w-7 p-0">+</Button>
+                      </>
+                    )}
+                    <button onClick={() => openEditDialog(inv)} className="px-2 py-1 text-gray-500 hover:text-gray-700 text-xs">Edit</button>
+                    <button onClick={() => handleRemoveItem(inv)} className="px-1 py-1 text-red-400 hover:text-red-600 text-sm">✕</button>
                   </div>
                 </CardContent>
               </Card>
