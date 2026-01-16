@@ -156,6 +156,10 @@ export function InventoryList({
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
+  // Inline quantity edit state
+  const [editingQuantityId, setEditingQuantityId] = useState<string | null>(null)
+  const [editingQuantityValue, setEditingQuantityValue] = useState('')
+
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null)
@@ -488,6 +492,80 @@ export function InventoryList({
 
     setUpdatingId(null)
     router.refresh()
+  }
+
+  async function handleDirectQuantitySet(inv: InventoryItem, newQuantity: number) {
+    if (!inv.items) return
+    if (newQuantity === inv.quantity) {
+      setEditingQuantityId(null)
+      return
+    }
+
+    setUpdatingId(inv.id)
+    const supabase = createClient()
+    const clampedQuantity = Math.max(0, Math.floor(newQuantity))
+
+    const { error: updateError } = await supabase
+      .from('inventory')
+      .update({ quantity: clampedQuantity })
+      .eq('id', inv.id)
+
+    if (updateError) {
+      toast.error('Failed to update quantity')
+      setUpdatingId(null)
+      setEditingQuantityId(null)
+      return
+    }
+
+    // Log the change
+    const delta = clampedQuantity - inv.quantity
+    const action = delta > 0 ? 'added' : 'used'
+    await supabase.from('inventory_log').insert({
+      inventory_id: inv.id,
+      item_id: inv.items.id,
+      action,
+      quantity_change: delta,
+      performed_by: userId,
+      notes: 'Set via inline edit',
+    })
+
+    if (clampedQuantity === 0) {
+      toast.success(`${inv.items.name} is now depleted`)
+    } else {
+      toast.success(`${inv.items.name}: ${inv.quantity} → ${clampedQuantity} ${inv.unit}`)
+    }
+
+    setUpdatingId(null)
+    setEditingQuantityId(null)
+    router.refresh()
+  }
+
+  function startInlineQuantityEdit(inv: InventoryItem) {
+    setEditingQuantityId(inv.id)
+    setEditingQuantityValue(inv.quantity.toString())
+  }
+
+  function handleInlineQuantityKeyDown(e: React.KeyboardEvent<HTMLInputElement>, inv: InventoryItem) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const newQty = parseInt(editingQuantityValue, 10)
+      if (!isNaN(newQty)) {
+        handleDirectQuantitySet(inv, newQty)
+      } else {
+        setEditingQuantityId(null)
+      }
+    } else if (e.key === 'Escape') {
+      setEditingQuantityId(null)
+    }
+  }
+
+  function handleInlineQuantityBlur(inv: InventoryItem) {
+    const newQty = parseInt(editingQuantityValue, 10)
+    if (!isNaN(newQty)) {
+      handleDirectQuantitySet(inv, newQty)
+    } else {
+      setEditingQuantityId(null)
+    }
   }
 
   function openPriorityDialog(inv: InventoryItem) {
@@ -1378,7 +1456,26 @@ export function InventoryList({
                     ) : (
                       <>
                         <Button size="sm" variant="outline" onClick={() => handleQuantityChange(inv, -1)} disabled={isUpdating} className="h-7 w-7 p-0">-</Button>
-                        <span className="w-8 text-center text-sm font-semibold">{inv.quantity}</span>
+                        {editingQuantityId === inv.id ? (
+                          <input
+                            type="number"
+                            min="0"
+                            value={editingQuantityValue}
+                            onChange={(e) => setEditingQuantityValue(e.target.value)}
+                            onKeyDown={(e) => handleInlineQuantityKeyDown(e, inv)}
+                            onBlur={() => handleInlineQuantityBlur(inv)}
+                            autoFocus
+                            className="w-12 h-7 text-center text-sm font-semibold border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => startInlineQuantityEdit(inv)}
+                            className="w-8 text-center text-sm font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer"
+                            title="Click to edit quantity"
+                          >
+                            {inv.quantity}
+                          </button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => handleQuantityChange(inv, 1)} disabled={isUpdating} className="h-7 w-7 p-0">+</Button>
                       </>
                     )}
