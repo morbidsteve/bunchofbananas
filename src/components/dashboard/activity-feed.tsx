@@ -9,12 +9,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 interface ActivityItem {
   id: string
-  action_type: string
-  action_description: string
-  entity_type: string | null
-  entity_name: string | null
-  created_at: string
-  user_id: string
+  action: string
+  quantity_change: number
+  performed_at: string
+  notes: string | null
+  items: {
+    name: string
+    household_id: string
+  }
 }
 
 interface ActivityFeedProps {
@@ -23,24 +25,27 @@ interface ActivityFeedProps {
 }
 
 const actionIcons: Record<string, string> = {
-  add: '➕',
-  remove: '➖',
-  update: '✏️',
-  use: '📦',
-  restock: '📥',
-  create: '🆕',
-  delete: '🗑️',
-  share: '🔗',
-  invite: '✉️',
+  added: '➕',
+  removed: '➖',
+  used: '📦',
+  expired: '⏰',
+  moved: '🔄',
 }
 
-const entityColors: Record<string, string> = {
-  inventory: 'bg-blue-100 text-blue-800',
-  item: 'bg-green-100 text-green-800',
-  recipe: 'bg-purple-100 text-purple-800',
-  storage_unit: 'bg-amber-100 text-amber-800',
-  shelf: 'bg-orange-100 text-orange-800',
-  household: 'bg-gray-100 text-gray-800',
+const actionLabels: Record<string, string> = {
+  added: 'Added',
+  removed: 'Removed',
+  used: 'Used',
+  expired: 'Expired',
+  moved: 'Moved',
+}
+
+const actionColors: Record<string, string> = {
+  added: 'bg-green-100 text-green-800',
+  removed: 'bg-red-100 text-red-800',
+  used: 'bg-blue-100 text-blue-800',
+  expired: 'bg-orange-100 text-orange-800',
+  moved: 'bg-purple-100 text-purple-800',
 }
 
 function formatTimeAgo(dateString: string): string {
@@ -66,11 +71,23 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
     setError(null)
     const supabase = createClient()
 
+    // Query inventory_log and join with items to get item names
+    // Filter by household through items table
     const { data, error: fetchError } = await supabase
-      .from('activity_log')
-      .select('*')
-      .eq('household_id', householdId)
-      .order('created_at', { ascending: false })
+      .from('inventory_log')
+      .select(`
+        id,
+        action,
+        quantity_change,
+        performed_at,
+        notes,
+        items!inner (
+          name,
+          household_id
+        )
+      `)
+      .eq('items.household_id', householdId)
+      .order('performed_at', { ascending: false })
       .limit(limit)
 
     if (fetchError) {
@@ -78,10 +95,16 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
       if (fetchError.code === '42P01') {
         setActivities([])
       } else {
+        console.error('Failed to load activity:', fetchError)
         setError('Failed to load activity')
       }
     } else {
-      setActivities(data || [])
+      // Transform the data to flatten the items relationship
+      const transformed = (data || []).map((item) => ({
+        ...item,
+        items: item.items as unknown as { name: string; household_id: string },
+      }))
+      setActivities(transformed)
     }
     setLoading(false)
   }
@@ -89,20 +112,20 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
   useEffect(() => {
     fetchActivities()
 
-    // Set up real-time subscription
+    // Set up real-time subscription for new activity
     const supabase = createClient()
     const channel = supabase
-      .channel('activity-changes')
+      .channel('inventory-log-changes')
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'activity_log',
-          filter: `household_id=eq.${householdId}`,
+          table: 'inventory_log',
         },
-        (payload) => {
-          setActivities((prev) => [payload.new as ActivityItem, ...prev].slice(0, limit))
+        () => {
+          // Refetch to get the joined item data
+          fetchActivities()
         }
       )
       .subscribe()
@@ -188,37 +211,41 @@ export function ActivityFeed({ householdId, limit = 10 }: ActivityFeedProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {activities.map((activity) => (
-            <div
-              key={activity.id}
-              className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <div className="text-xl flex-shrink-0">
-                {actionIcons[activity.action_type] || '📝'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm">
-                  {activity.action_description}
-                  {activity.entity_name && (
-                    <span className="font-medium"> &quot;{activity.entity_name}&quot;</span>
+          {activities.map((activity) => {
+            const itemName = activity.items?.name ?? 'Unknown item'
+            const absChange = Math.abs(Number(activity.quantity_change))
+            const actionLabel = actionLabels[activity.action] || activity.action
+
+            return (
+              <div
+                key={activity.id}
+                className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                <div className="text-xl flex-shrink-0">
+                  {actionIcons[activity.action] || '📝'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm">
+                    {actionLabel} <span className="font-medium">{absChange}</span> {itemName}
+                  </p>
+                  {activity.notes && (
+                    <p className="text-xs text-gray-500 truncate">{activity.notes}</p>
                   )}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  {activity.entity_type && (
+                  <div className="flex items-center gap-2 mt-1">
                     <Badge
                       variant="secondary"
-                      className={`text-xs ${entityColors[activity.entity_type] || ''}`}
+                      className={`text-xs ${actionColors[activity.action] || ''}`}
                     >
-                      {activity.entity_type}
+                      {activity.action}
                     </Badge>
-                  )}
-                  <span className="text-xs text-gray-400">
-                    {formatTimeAgo(activity.created_at)}
-                  </span>
+                    <span className="text-xs text-gray-400">
+                      {formatTimeAgo(activity.performed_at)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </CardContent>
     </Card>
